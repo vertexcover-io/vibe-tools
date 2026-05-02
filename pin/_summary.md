@@ -1,0 +1,1 @@
+A SQLite-backed CLI bookmark manager with nested folders, tags, and Claude-powered natural-language add/search — describe a bookmark in English and Claude fetches the page, infers metadata, and files it; search by intent ("that ml paper about attention") and the matched URL goes straight to the clipboard.

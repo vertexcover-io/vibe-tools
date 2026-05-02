@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  models: read
 
 jobs:
   update-readme:
@@ -31,7 +30,7 @@ jobs:
 
       - name: Run cogapp to update README
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LLM_GITHUB_MODELS_KEY: ${{ secrets.LLM_GITHUB_MODELS_KEY }}
         run: cog -r -P README.md
 
       - name: Commit and push if changed

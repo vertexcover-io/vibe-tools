@@ -1,0 +1,1 @@
+Translates an English description into a concrete bash command using the Claude CLI, with the current directory's file listing passed as context so requests like "delete the largest file" resolve to real filenames. Optionally copies the result to the clipboard or executes it after a confirmation prompt.
