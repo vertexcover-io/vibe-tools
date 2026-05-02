@@ -22,6 +22,8 @@ tools_with_dates = []
 for d in root.iterdir():
     if not d.is_dir() or d.name.startswith('.'):
         continue
+    if not (d / "README.md").exists():
+        continue
     try:
         result = subprocess.run(
             ['git', 'log', '-1', '--format=%aI', '--', d.name],

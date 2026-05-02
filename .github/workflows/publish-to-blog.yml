@@ -1,0 +1,86 @@
+name: Publish tools to blog
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '*/README.md'
+      - '*/_summary.md'
+      - 'scripts/generate_blog_post.py'
+      - '.github/workflows/publish-to-blog.yml'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout vibe-tools
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed tool folders
+        id: changed
+        run: |
+          if [ -z "${{ github.event.before }}" ] || [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            base="HEAD~1"
+          else
+            base="${{ github.event.before }}"
+          fi
+          changed=$(git diff --name-only "$base" HEAD -- '*/README.md' '*/_summary.md' \
+            | awk -F/ 'NF>=2 {print $1}' \
+            | sort -u)
+          echo "tools<<EOF" >> "$GITHUB_OUTPUT"
+          for d in $changed; do
+            if [ -d "$d" ] && [ -f "$d/README.md" ] && [ "$d" != "scripts" ]; then
+              echo "$d" >> "$GITHUB_OUTPUT"
+            fi
+          done
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        if: steps.changed.outputs.tools != ''
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Checkout blog repo
+        if: steps.changed.outputs.tools != ''
+        uses: actions/checkout@v5
+        with:
+          repository: vertexcover-io/vertexcover-io.github.com
+          path: blog
+          token: ${{ secrets.BLOG_PUSH_TOKEN }}
+
+      - name: Generate posts
+        if: steps.changed.outputs.tools != ''
+        run: |
+          while IFS= read -r tool; do
+            [ -z "$tool" ] && continue
+            python3 scripts/generate_blog_post.py --tool "$tool" --out blog/tools
+          done <<< "${{ steps.changed.outputs.tools }}"
+
+      - name: Open PR on blog repo
+        if: steps.changed.outputs.tools != ''
+        env:
+          GH_TOKEN: ${{ secrets.BLOG_PUSH_TOKEN }}
+        run: |
+          cd blog
+          if git diff --quiet && [ -z "$(git status --porcelain)" ]; then
+            echo "No post changes to publish"
+            exit 0
+          fi
+          tools_csv=$(echo "${{ steps.changed.outputs.tools }}" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
+          short_sha="${GITHUB_SHA:0:7}"
+          branch="auto-publish/${short_sha}"
+          git config user.name "vibe-tools-bot"
+          git config user.email "vibe-tools-bot@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add tools/
+          git commit -m "publish from vibe-tools@${short_sha}: ${tools_csv}"
+          git push origin "$branch"
+          gh pr create \
+            --title "Publish ${tools_csv} from vibe-tools" \
+            --body "Auto-generated from [vibe-tools@${short_sha}](https://github.com/vertexcover-io/vibe-tools/commit/${GITHUB_SHA}). Updates: ${tools_csv}." \
+            --base main \
+            --head "$branch"
