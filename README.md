@@ -1,4 +1,4 @@
-# ai-experiments
+# vibe-tools
 
 A collection of small utilities — Python scripts, Bash scripts, HTML/JS pages — built entirely via prompts, skills, and coding agents. Every line of text and code was written by an LLM.
 
