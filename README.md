@@ -113,7 +113,11 @@ for dirname, commit_date in tools_with_dates:
     print()
 
 ]]]-->
-## 1 tools
+## 2 tools
+
+### [pin](https://github.com/vertexcover-io/vibe-tools/tree/master/pin#readme) (2026-05-02 06:32)
+
+*No description available — auto-summary unavailable.*
 
 ### [aibash](https://github.com/vertexcover-io/vibe-tools/tree/master/aibash#readme) (2026-05-02 06:09)
 
