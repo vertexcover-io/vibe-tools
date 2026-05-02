@@ -1,4 +1,5 @@
 #!/usr/bin/env -S uv run --script
+# AI-generated. See PROMPT.md for the prompts and model used.
 # /// script
 # requires-python = ">=3.11"
 # dependencies = []

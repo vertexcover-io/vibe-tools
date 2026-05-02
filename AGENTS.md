@@ -19,6 +19,29 @@ Each tool folder must contain:
 - `PROMPT.md` — the prompt(s) used to generate the tool, plus the model/agent used. Capture iterations if the tool went through multiple prompt revisions.
 - The script itself.
 
+## AI-generated attribution header
+
+Every script in this repo MUST start with a short comment declaring it is AI-generated and pointing readers to the prompt log. This goes at the very top of the file (after the shebang for executables, after `<!DOCTYPE html>` for HTML).
+
+Use the comment syntax appropriate to the language:
+
+- **Python / Bash / shell:**
+  ```
+  # AI-generated. See PROMPT.md for the prompts and model used.
+  ```
+- **HTML:**
+  ```html
+  <!-- AI-generated. See PROMPT.md for the prompts and model used. -->
+  ```
+- **JS / CSS (if a tool ever has standalone files):**
+  ```
+  /* AI-generated. See PROMPT.md for the prompts and model used. */
+  ```
+
+The reference is to the sibling `PROMPT.md` in the same tool folder — no path prefix needed.
+
+For Python tools the line goes **above** the PEP 723 `# /// script` block so the inline metadata stays contiguous.
+
 ## Python tools
 
 - Standalone scripts using [`uv run`](https://docs.astral.sh/uv/guides/scripts/) with [PEP 723 inline metadata](https://peps.python.org/pep-0723/) — no `requirements.txt`, no venv.
