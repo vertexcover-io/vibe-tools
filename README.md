@@ -117,7 +117,7 @@ for dirname, commit_date in tools_with_dates:
 ]]]-->
 ## 3 tools
 
-### [spawn-claude](https://github.com/vertexcover-io/vibe-tools/tree/master/spawn-claude#readme) (2026-06-19 17:45)
+### [spawn-claude](https://github.com/vertexcover-io/vibe-tools/tree/master/spawn-claude#readme) (2026-06-19 17:59)
 
 *No description available — auto-summary unavailable.*
 
