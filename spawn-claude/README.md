@@ -15,6 +15,55 @@ independent pluggable axes:
 uv run spawn-claude.py [prompt] [flags]
 ```
 
+## Flags (help-style overview)
+
+```
+uv run spawn-claude.py [prompt] [flags] [-- extra args for claude]
+
+positional:
+  prompt                  Prompt for the new session. Optional for fork (the
+                          task is shown as a reminder after you pick a branch point).
+
+axes:
+  --surface SURFACE       Where it runs. One of:
+                            auto (default)  detect what's running; ask if ambiguous
+                            tmux            pane/window in the current tmux session
+                            cmux            surface in cmux
+                            ghostty         a Ghostty window/tab/split
+                            terminal        macOS Terminal.app (AppleScript)
+                            headless        run to completion, capture output
+  --mode MODE             How it runs:
+                            interactive (default)  a live session to watch/take over
+                            headless               non-interactive; forces --surface headless
+  --context CONTEXT       What it starts with:
+                            fresh (default)  just the prompt
+                            summary          seed with a summary of the parent session
+                            fork             branch off via --fork-session, auto-/rewind
+
+placement targets (per surface):
+  --tmux-target T         window (default) | split-h | split-v | session
+  --cmux-target T         tab (default) | window | workspace | split-h | split-v
+  --ghostty-target T      new-window (default) | tab | split-h | split-v
+                          (split-h = side-by-side, split-v = stacked)
+
+parent session (for summary/fork):
+  --session-id UUID       Parent session id. Recommended — avoids guessing among
+                          concurrent sessions sharing a project dir.
+
+other:
+  --model MODEL           Model for the child session (passed to claude --model)
+  --cwd PATH              Working directory (defaults to current; passed through)
+  --detect-surface        Print surface detection as JSON and exit (no launch):
+                          {confident, inside, available}
+  --dry-run               Print the resolved claude command without launching
+  extra...                Any trailing args are forwarded straight to claude
+
+exit codes:
+  0  success (or detection/dry-run printed)
+  1  usage error (no claude on PATH, fork without parent, etc.)
+  2  NEEDS_CONFIRMATION — `auto` was ambiguous; pass --surface explicitly
+```
+
 Examples:
 
 ```bash
@@ -33,6 +82,9 @@ uv run spawn-claude.py --context fork --surface ghostty --ghostty-target split-h
 
 # see the resolved claude command without launching
 uv run spawn-claude.py --context fresh --surface ghostty --dry-run "hello"
+
+# just check what surface auto-detection sees (prints JSON, launches nothing)
+uv run spawn-claude.py --detect-surface
 ```
 
 ## How each axis works
@@ -46,7 +98,14 @@ uv run spawn-claude.py --context fresh --surface ghostty --dry-run "hello"
 
 `split-h` is side-by-side, `split-v` is stacked.
 
-`--surface auto` picks: `$TMUX` → tmux, else `$TERM_PROGRAM=ghostty` → ghostty, else cmux if installed, else terminal.
+**`--surface auto`** detects what's actually running rather than guessing. It separates surfaces it's
+*inside* (strong env signals: `$TMUX` → tmux, `$CMUX_WORKSPACE_ID`/`$CMUX_SURFACE_ID` → cmux,
+`$TERM_PROGRAM=ghostty`/`$GHOSTTY_RESOURCES_DIR` → ghostty) from those merely *available* (on PATH or
+app bundle present). It resolves silently only when exactly one surface is *inside* — or nothing is
+present at all, in which case it falls back to `terminal`. When more than one surface is inside
+(e.g. ghostty-in-cmux or tmux-in-cmux nesting), it **refuses to guess**: it exits with code `2` and a
+`NEEDS_CONFIRMATION` message listing the candidates, so the caller can confirm. Run `--detect-surface`
+to see the same `{confident, inside, available}` result as JSON without launching anything.
 
 **Context:**
 - `fresh` → `claude "<prompt>"`.
@@ -69,6 +128,21 @@ target a different project directory.
 (`tmux`, `cmux`, Ghostty.app) to be installed. Ghostty tab/split targets and the `terminal` surface
 use AppleScript (`osascript`) and need macOS Accessibility permission for keystroke sending.
 
-## Slash command
+## Install
 
-`spawn.md` is installed as `/spawn` by symlinking it into `~/.claude/commands/`.
+The script runs standalone via `uv` — nothing to install for the script itself:
+
+```bash
+git clone https://github.com/vertexcover-io/vibe-tools.git
+uv run vibe-tools/spawn-claude/spawn-claude.py --detect-surface
+```
+
+To use it as the `/spawn` slash command in Claude Code, symlink `spawn.md` into `~/.claude/commands/`:
+
+```bash
+ln -s "$PWD/vibe-tools/spawn-claude/spawn.md" ~/.claude/commands/spawn.md
+# then in Claude Code:  /spawn <your prompt>
+```
+
+`spawn.md` hardcodes the absolute path to `spawn-claude.py`, so if you clone elsewhere, edit that path
+inside `spawn.md` to match.
