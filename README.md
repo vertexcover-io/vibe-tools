@@ -115,15 +115,19 @@ for dirname, commit_date in tools_with_dates:
     print()
 
 ]]]-->
-## 2 tools
+## 3 tools
 
-### [pin](https://github.com/vertexcover-io/vibe-tools/tree/master/pin#readme) (2026-05-02 06:32)
+### [spawn-claude](https://github.com/vertexcover-io/vibe-tools/tree/master/spawn-claude#readme) (2026-06-19 17:45)
 
-A SQLite-backed CLI bookmark manager with nested folders, tags, and Claude-powered natural-language add/search — describe a bookmark in English and Claude fetches the page, infers metadata, and files it; search by intent ("that ml paper about attention") and the matched URL goes straight to the clipboard.
+*No description available — auto-summary unavailable.*
 
-### [aibash](https://github.com/vertexcover-io/vibe-tools/tree/master/aibash#readme) (2026-05-02 06:09)
+### [aibash](https://github.com/vertexcover-io/vibe-tools/tree/master/aibash#readme) (2026-05-02 12:10)
 
 Translates an English description into a concrete bash command using the Claude CLI, with the current directory's file listing passed as context so requests like "delete the largest file" resolve to real filenames. Optionally copies the result to the clipboard or executes it after a confirmation prompt.
+
+### [pin](https://github.com/vertexcover-io/vibe-tools/tree/master/pin#readme) (2026-05-02 12:10)
+
+A SQLite-backed CLI bookmark manager with nested folders, tags, and Claude-powered natural-language add/search — describe a bookmark in English and Claude fetches the page, infers metadata, and files it; search by intent ("that ml paper about attention") and the matched URL goes straight to the clipboard.
 
 <!--[[[end]]]-->
 
