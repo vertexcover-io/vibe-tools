@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<!-- AI-generated. See PROMPT.md for the prompts and model used. -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{VIDEO_TITLE}} — video-lens</title>
+  <style>
+    :root {
+      --bg: #faf8f5;
+      --ink: #1d1b18;
+      --muted: #6b665e;
+      --accent: #c0392b;
+      --line: #e6e1d8;
+      --card: #fffefb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.65;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 48px 24px 96px; }
+    header { border-bottom: 2px solid var(--ink); padding-bottom: 24px; margin-bottom: 32px; }
+    .kicker {
+      font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+      color: var(--accent); font-weight: 700; margin-bottom: 12px;
+    }
+    h1 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 34px; line-height: 1.2; margin: 0 0 12px;
+    }
+    .meta-line { color: var(--muted); font-size: 14px; }
+    .hero {
+      display: flex; gap: 18px; align-items: center;
+      margin: 24px 0 8px; padding: 16px; background: var(--card);
+      border: 1px solid var(--line); border-radius: 10px;
+    }
+    .hero img { width: 160px; border-radius: 6px; display: block; }
+    .hero a {
+      color: var(--accent); font-weight: 600; text-decoration: none;
+      font-size: 15px;
+    }
+    .hero a:hover { text-decoration: underline; }
+    h2 {
+      font-family: Georgia, serif; font-size: 22px;
+      margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line);
+    }
+    .summary { font-size: 18px; }
+    .takeaway {
+      background: #fdf3e7; border-left: 4px solid var(--accent);
+      padding: 16px 20px; border-radius: 0 8px 8px 0; font-size: 17px;
+    }
+    ul, ol { padding-left: 22px; }
+    li { margin: 8px 0; }
+    a.ts {
+      font-variant-numeric: tabular-nums; color: var(--accent);
+      text-decoration: none; font-weight: 600; font-size: 13px;
+    }
+    a.ts:hover { text-decoration: underline; }
+    code { background: #efe9df; padding: 1px 5px; border-radius: 3px; font-size: 13px; }
+    footer {
+      margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line);
+      color: var(--muted); font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="kicker">video-lens report</div>
+      <h1>{{VIDEO_TITLE}}</h1>
+      <div class="meta-line">{{META_LINE}}</div>
+      <div class="hero">
+        <a href="{{VIDEO_URL}}" target="_blank" rel="noopener noreferrer">
+          <img src="{{THUMB}}" alt="video thumbnail">
+        </a>
+        <a href="{{VIDEO_URL}}" target="_blank" rel="noopener noreferrer">Watch on YouTube ↗</a>
+      </div>
+    </header>
+
+    <section>
+      <h2>Summary</h2>
+      <div class="summary">{{SUMMARY}}</div>
+    </section>
+
+    <section>
+      <h2>Key points</h2>
+      {{KEY_POINTS}}
+    </section>
+
+    <section>
+      <h2>Takeaway</h2>
+      <div class="takeaway">{{TAKEAWAY}}</div>
+    </section>
+
+    <section>
+      <h2>Outline</h2>
+      {{OUTLINE}}
+    </section>
+
+    <footer>
+      Generated {{GENERATED}} by video-lens · <a href="{{VIDEO_URL}}">{{VIDEO_URL}}</a>
+    </footer>
+  </div>
+</body>
+</html>
