@@ -115,7 +115,11 @@ for dirname, commit_date in tools_with_dates:
     print()
 
 ]]]-->
-## 4 tools
+## 5 tools
+
+### [video-lens](https://github.com/vertexcover-io/vibe-tools/tree/master/video-lens#readme) (2026-06-24 08:14)
+
+*No description available — auto-summary unavailable.*
 
 ### [electron-mod](https://github.com/vertexcover-io/vibe-tools/tree/master/electron-mod#readme) (2026-06-19 19:04)
 
