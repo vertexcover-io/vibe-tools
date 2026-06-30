@@ -1,0 +1,34 @@
+{
+  "name": "@claude-sessions/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@claude-sessions/core": "*",
+    "@hono/node-server": "^1.13.7",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@node-rs/argon2": "^2.0.2",
+    "drizzle-orm": "^0.36.4",
+    "hono": "^4.6.14",
+    "jose": "^5.9.6",
+    "postgres": "^3.4.5",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "drizzle-kit": "^0.30.1",
+    "testcontainers": "^10.16.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

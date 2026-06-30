@@ -1,0 +1,26 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "env": ["DATABASE_URL", "JWT_SECRET", "EMBED_PROVIDER", "OPENAI_API_KEY"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "db:migrate": {
+      "cache": false,
+      "env": ["DATABASE_URL", "JWT_SECRET", "EMBED_PROVIDER", "OPENAI_API_KEY"]
+    }
+  }
+}

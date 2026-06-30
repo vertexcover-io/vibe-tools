@@ -1,0 +1,4 @@
+.pi-config/
+.sessions/
+node_modules/
+dist/

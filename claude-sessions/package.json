@@ -1,0 +1,22 @@
+{
+  "name": "claude-sessions",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "typecheck": "turbo run typecheck",
+    "db:migrate": "turbo run db:migrate"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "bun@1.2.19"
+}

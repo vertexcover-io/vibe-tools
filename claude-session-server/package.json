@@ -1,0 +1,24 @@
+{
+  "name": "claude-session-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "WS + REST server exposing pi AgentSessions backed by the host Claude subscription",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.79.9",
+    "commander": "^12.1.0",
+    "ws": "^8.18.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

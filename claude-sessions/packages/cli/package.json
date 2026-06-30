@@ -1,0 +1,28 @@
+{
+  "name": "@claude-sessions/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "claude-sessions": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && chmod +x dist/main.js",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@claude-sessions/adapter-claude": "*",
+    "@claude-sessions/core": "*",
+    "chokidar": "^4.0.3",
+    "commander": "^12.1.0",
+    "proper-lockfile": "^4.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/proper-lockfile": "^4.1.4",
+    "typescript": "^5.7.2",
+    "undici": "^6.21.0",
+    "vitest": "^2.1.8"
+  }
+}
