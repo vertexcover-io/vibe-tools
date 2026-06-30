@@ -9,6 +9,7 @@ import {
   type AuthEntry,
 } from "./init.ts";
 import { startServer } from "./server.ts";
+import { runChat } from "./chat.ts";
 
 const realInstaller = async (pkg: string, configDir: string): Promise<void> => {
   const result = spawnSync("pi", ["install", pkg], {
@@ -54,6 +55,16 @@ export const buildProgram = (): Command => {
     .action(async () => {
       const cfg = loadConfig(process.env);
       await startServer(cfg);
+    });
+
+  program
+    .command("chat")
+    .description("interactive chat REPL (auto-starts the server unless --connect)")
+    .option("--connect <ws-url>", "attach to a running server instead of auto-starting")
+    .option("--token <token>", "bearer token (for --connect)")
+    .option("--thinking <level>", "initial thinking level: off|minimal|low|medium|high|xhigh", "off")
+    .action(async (opts: { connect?: string; token?: string; thinking?: string }) => {
+      await runChat(opts);
     });
 
   return program;

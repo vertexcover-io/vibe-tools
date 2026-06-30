@@ -61,3 +61,18 @@ The e2e covers: WS connect + streamed `PONG` with usage, thinking on/off,
 `POST /complete`, `GET /sessions` + `/messages`, resume across reconnect
 (remembers a fact), detach-to-completion with buffered replay, single-writer
 `session_busy`, and bearer enforcement (4401 / 401).
+
+## Interactive chat CLI
+
+A pi-style REPL that auto-starts the server in the background and streams responses:
+
+```bash
+SERVER_BEARER_TOKENS=secret123 npx tsx src/bin.ts chat
+# or attach to an already-running server:
+npx tsx src/bin.ts chat --connect ws://localhost:8787 --token secret123
+```
+
+In the REPL: type a prompt and watch text stream. Slash commands:
+`/new`, `/resume <id>`, `/sessions`, `/thinking <off|low|medium|high|xhigh>`,
+`/clear`, `/help`, `/quit`. Ctrl-C interrupts the current turn; Ctrl-D quits.
+Tool calls show inline as `[tool: <name>]`.
