@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { resolve } from "node:path";
-import { loadConfig, DEFAULT_PI_AGENT_DIR, PKG_DIR } from "./config.ts";
+import { loadConfig, DEFAULT_PI_AGENT_DIR, APP_DIR } from "./config.ts";
 
 describe("loadConfig", () => {
   it("test_REQ_027_config_dir_resolution: defaults to the pi agent dir (where auth lives), env override wins", () => {
@@ -15,7 +15,7 @@ describe("loadConfig", () => {
     const a = loadConfig({});
     const b = loadConfig({});
     expect(a.workingDir).toBe(b.workingDir);
-    expect(a.workingDir).toBe(resolve(PKG_DIR, ".sessions"));
+    expect(a.workingDir).toBe(resolve(APP_DIR, ".sessions"));
 
     const overridden = loadConfig({ PI_WORKING_DIR: "/pinned/work" });
     expect(overridden.workingDir).toBe(resolve("/pinned/work"));

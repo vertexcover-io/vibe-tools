@@ -1,15 +1,17 @@
 // AI-generated. See PROMPT.md for the prompts and model used.
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { Command } from "commander";
-import { loadConfig } from "./config.ts";
+import { startServer } from "@agentwire/server";
+import { loadConfig, APP_DIR } from "./config.ts";
 import {
   runInit,
+  verifyConfigDir,
   readSettingsFile,
   readRegistryFile,
   type AuthEntry,
 } from "./init.ts";
-import { startServer } from "./server.ts";
-import { runChat } from "./chat.ts";
 
 const realInstaller = async (pkg: string, configDir: string): Promise<void> => {
   const result = spawnSync("pi", ["install", pkg], {
@@ -29,10 +31,15 @@ const realAuthRunner = async (
   return { ok: result.status === 0 };
 };
 
+// CORE-tier runs don't have the tool packages installed; only verify the
+// config dir when a real settings.json is present and declares packages.
+const shouldVerifyConfigDir = (): boolean =>
+  existsSync(resolve(APP_DIR, "settings.json"));
+
 export const buildProgram = (): Command => {
   const program = new Command();
   program
-    .name("claude-session-server")
+    .name("agentwire-server")
     .description("WS + REST server exposing pi AgentSessions");
 
   program
@@ -54,26 +61,21 @@ export const buildProgram = (): Command => {
     .description("start the HTTP + WS server")
     .action(async () => {
       const cfg = loadConfig(process.env);
+      if (shouldVerifyConfigDir()) {
+        try {
+          verifyConfigDir(cfg);
+        } catch {
+          // Tool-layer extensions (Linear/Gmail/browser/Notion) are not
+          // installed in this config dir. The CORE server (sessions +
+          // subscription auth) runs fine without them; run `init` to provision
+          // the tool layer.
+          console.warn(
+            "[serve] tool-layer extensions not provisioned — core server only. Run `init` to add Linear/Gmail/browser/Notion.",
+          );
+        }
+      }
       await startServer(cfg);
     });
-
-  program
-    .command("chat")
-    .description("interactive chat REPL (auto-starts the server unless --connect)")
-    .option("--connect <ws-url>", "attach to a running server instead of auto-starting")
-    .option("--token <token>", "bearer token (for --connect)")
-    .option("--thinking <level>", "model reasoning level: off|minimal|low|medium|high|xhigh", "medium")
-    .option("--no-tools", "hide tool-call lines (display only; tools still run)")
-    .action(
-      async (opts: {
-        connect?: string;
-        token?: string;
-        thinking?: string;
-        tools?: boolean;
-      }) => {
-        await runChat({ ...opts, showTools: opts.tools });
-      },
-    );
 
   return program;
 };

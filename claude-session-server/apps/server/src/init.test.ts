@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Config } from "@agentwire/server";
 import { runInit, verifyConfigDir } from "./init.ts";
-import type { Config } from "./config.ts";
 
 const SETTINGS = {
   packages: ["pi-mono-linear", "@e9n/pi-gmail", "pi-agent-browser-native"],

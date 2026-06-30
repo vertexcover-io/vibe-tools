@@ -1,8 +1,8 @@
 // AI-generated. See PROMPT.md for the prompts and model used.
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { Config } from "./config.ts";
-import { PKG_DIR } from "./config.ts";
+import { type Config } from "@agentwire/server";
+import { APP_DIR } from "./config.ts";
 
 export interface Settings {
   readonly packages: readonly string[];
@@ -31,12 +31,12 @@ export interface InitSummary {
 }
 
 export const readSettingsFile = (): Settings => {
-  const raw = readFileSync(resolve(PKG_DIR, "settings.json"), "utf8");
+  const raw = readFileSync(resolve(APP_DIR, "settings.json"), "utf8");
   return JSON.parse(raw) as Settings;
 };
 
 export const readRegistryFile = (): readonly AuthEntry[] => {
-  const raw = readFileSync(resolve(PKG_DIR, "auth-registry.json"), "utf8");
+  const raw = readFileSync(resolve(APP_DIR, "auth-registry.json"), "utf8");
   return JSON.parse(raw) as readonly AuthEntry[];
 };
 
