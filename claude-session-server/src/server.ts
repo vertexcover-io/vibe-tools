@@ -1,5 +1,5 @@
 // AI-generated. See PROMPT.md for the prompts and model used.
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Config } from "./config.ts";
 import { PKG_DIR } from "./config.ts";
@@ -50,6 +50,11 @@ export const buildServerDeps = (cfg: Config, lister?: SessionLister): ServerDeps
 };
 
 export const startServer = async (cfg: Config): Promise<void> => {
+  // pi uses workingDir as the session cwd and as the SessionManager dir. If it
+  // doesn't exist, every bash tool call and session write fails with
+  // "Working directory does not exist". Create it up front.
+  mkdirSync(cfg.workingDir, { recursive: true });
+
   if (shouldVerifyConfigDir()) {
     try {
       verifyConfigDir(cfg);
