@@ -39,6 +39,8 @@ interface Collected {
   thinkingDeltas: number;
   turnEnds: number;
   lastUsage: unknown;
+  readonly toolStarts: Frame[];
+  readonly toolEnds: Frame[];
 }
 
 interface Client {
@@ -62,6 +64,8 @@ const connect = (port: number, query = ""): Promise<Client> =>
       thinkingDeltas: 0,
       turnEnds: 0,
       lastUsage: undefined,
+      toolStarts: [],
+      toolEnds: [],
     };
     let sid: string | undefined;
     const waiters: { predicate: (c: Collected) => boolean; resolve: () => void }[] = [];
@@ -81,6 +85,8 @@ const connect = (port: number, query = ""): Promise<Client> =>
       if (frame.type === "session_ready") sid = frame.session_id as string;
       if (frame.type === "text_delta") collected.text += String(frame.delta);
       if (frame.type === "thinking_delta") collected.thinkingDeltas += 1;
+      if (frame.type === "tool_execution_start") collected.toolStarts.push(frame);
+      if (frame.type === "tool_execution_end") collected.toolEnds.push(frame);
       if (frame.type === "turn_end") {
         collected.turnEnds += 1;
         collected.lastUsage = frame.usage;
@@ -126,9 +132,16 @@ describe.skipIf(noClaudeCreds)("live e2e: real pi + Claude subscription", () => 
   let live: LiveServer;
   let cfg: Config;
   let tmpCwd: string;
+  let tmpRoot: string;
 
   beforeAll(() => {
-    tmpCwd = mkdtempSync(join(tmpdir(), "css-live-e2e-"));
+    // Point the working dir at a path that does NOT exist yet (a child of a
+    // fresh tmp dir). startLiveServer → buildServerDeps must create it; this is
+    // the regression guard for "Working directory does not exist" breaking the
+    // bash tool. Do NOT mkdir it here.
+    tmpRoot = mkdtempSync(join(tmpdir(), "css-live-e2e-"));
+    tmpCwd = join(tmpRoot, "sessions-not-yet-created");
+    expect(existsSync(tmpCwd)).toBe(false);
     cfg = loadConfig({
       SERVER_BEARER_TOKENS: TOKEN,
       CLAUDE_CONFIG_DIR: AGENT_DIR,
@@ -138,13 +151,19 @@ describe.skipIf(noClaudeCreds)("live e2e: real pi + Claude subscription", () => 
     });
   });
 
+  it("regression: server creates the working dir so the bash tool can run", async () => {
+    // buildServerDeps (called by startLiveServer in the next beforeAll) must
+    // have created the previously-absent working dir.
+    expect(existsSync(tmpCwd)).toBe(true);
+  });
+
   beforeAll(async () => {
     live = await startLiveServer(cfg);
   });
 
   afterAll(async () => {
     if (live !== undefined) await live.close();
-    if (tmpCwd !== undefined) rmSync(tmpCwd, { recursive: true, force: true });
+    if (tmpRoot !== undefined) rmSync(tmpRoot, { recursive: true, force: true });
   });
 
   it("VS-1: connect → session_ready, streamed PONG with usage, thinking on/off", async () => {
@@ -189,6 +208,69 @@ describe.skipIf(noClaudeCreds)("live e2e: real pi + Claude subscription", () => 
 
     client.close();
   }, 300000);
+
+  // Tool tests assert on the TOOL RESULT (deterministic), not the model's prose
+  // (which may narrate, defer, or stop early). The marker is produced BY the
+  // tool, so it lands in the tool_execution_end result regardless of phrasing.
+  // The load-bearing assertion is the regression guard: no tool result carries
+  // "Working directory does not exist".
+  it("tools: agent runs bash and the result has no working-dir error", async () => {
+    const client = await connect(live.port);
+    const marker = "css-tool-7f3a91";
+    client.send({
+      type: "prompt",
+      text:
+        `Run this exact bash command (and only this), then report its output: ` +
+        `printf '%s' "${marker}"`,
+    });
+    await client.waitFor((c) => c.turnEnds >= 1, 120000);
+
+    // (a) bash executed at least once.
+    const bashEnds = client.collected.toolEnds.filter((f) => f.toolName === "bash");
+    expect(bashEnds.length).toBeGreaterThanOrEqual(1);
+
+    // (b) REGRESSION GUARD: no bash result is the missing-working-dir failure,
+    // and at least one bash result is not an error.
+    for (const end of bashEnds) {
+      const resultText = lower(JSON.stringify(end.result ?? ""));
+      expect(resultText).not.toContain("working directory does not exist");
+      expect(resultText).not.toContain("cannot execute bash");
+    }
+    expect(bashEnds.some((end) => (end.isError ?? false) === false)).toBe(true);
+
+    // (c) the marker appears in a bash result (the command actually produced it).
+    const allBashResults = bashEnds.map((e) => JSON.stringify(e.result ?? "")).join("");
+    expect(allBashResults).toContain(marker);
+    client.close();
+  }, 180000);
+
+  it("tools: agent can write+read a file (no working-dir error)", async () => {
+    const client = await connect(live.port);
+    const marker = "css-fileio-b42e08";
+    client.send({
+      type: "prompt",
+      text:
+        `Use your tools to write the exact text "${marker}" to css-probe.txt in the ` +
+        `current directory, then read it back. Report what you read.`,
+    });
+    await client.waitFor((c) => c.turnEnds >= 1, 120000);
+
+    // A file/bash tool ran and none hit the missing-working-dir failure
+    // (the regression guard), and at least one tool succeeded — proving the
+    // working dir is writable. (We do NOT assert the model narrates the marker
+    // back: whether it performs the read-back step is model-dependent. The
+    // write tool's success on a real path is the durable signal.)
+    expect(client.collected.toolEnds.length).toBeGreaterThanOrEqual(1);
+    for (const end of client.collected.toolEnds) {
+      const resultText = lower(JSON.stringify(end.result ?? ""));
+      expect(resultText).not.toContain("working directory does not exist");
+      expect(resultText).not.toContain("cannot execute");
+    }
+    expect(
+      client.collected.toolEnds.some((end) => (end.isError ?? false) === false),
+    ).toBe(true);
+    client.close();
+  }, 180000);
 
   it("VS-2 one-shot: POST /complete returns text, GET /sessions lists it", async () => {
     const base = `http://127.0.0.1:${live.port}`;

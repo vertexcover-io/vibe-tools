@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { WebSocket } from "ws";
 import { startServer, buildServerDeps } from "./server.ts";
 import { loadConfig } from "./config.ts";
@@ -54,7 +57,12 @@ describe("e2e: real http + ws server boots via startServer", () => {
   });
 
   it("test_gap1_serve_wires_real_adapter: REST + WS resume resolve sessions via SessionManager.list, not a constructed path", async () => {
-    const cfg = loadConfig({ SERVER_BEARER_TOKENS: TOKEN, PI_WORKING_DIR: "/work" });
+    // Use a not-yet-created working dir: buildServerDeps must create it
+    // (regression guard for the missing-working-dir bash failure).
+    const tmpRoot = mkdtempSync(join(tmpdir(), "css-server-e2e-"));
+    const workDir = join(tmpRoot, "sessions-not-yet-created");
+    expect(existsSync(workDir)).toBe(false);
+    const cfg = loadConfig({ SERVER_BEARER_TOKENS: TOKEN, PI_WORKING_DIR: workDir });
     const info: SessionInfoLike = {
       id: "abc",
       path: "/home/.pi/agent/sessions/enc/123_abc.jsonl",
@@ -63,11 +71,13 @@ describe("e2e: real http + ws server boots via startServer", () => {
       messageCount: 3,
     };
     const lister = async (cwd: string): Promise<readonly SessionInfoLike[]> => {
-      expect(cwd).toBe("/work");
+      expect(cwd).toBe(workDir);
       return [info];
     };
 
     const deps = buildServerDeps(cfg, lister);
+    // buildServerDeps created the working dir.
+    expect(existsSync(workDir)).toBe(true);
 
     // REST adapter is the real pi-backed one: it lists the on-disk session.
     const listed = await deps.restAdapter.listSessions(50);
@@ -79,5 +89,6 @@ describe("e2e: real http + ws server boots via startServer", () => {
     const resolvedFile = await deps.resolveSessionFile("abc");
     expect(resolvedFile).toBe("/home/.pi/agent/sessions/enc/123_abc.jsonl");
     await expect(deps.resolveSessionFile("missing")).rejects.toThrow(/not found/);
+    rmSync(tmpRoot, { recursive: true, force: true });
   });
 });

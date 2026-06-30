@@ -36,6 +36,12 @@ export interface ServerDeps {
 // ~/.pi/agent/sessions/<encoded-cwd>/<ts>_<id>.jsonl, so a session file MUST be
 // looked up, never constructed from the working dir.
 export const buildServerDeps = (cfg: Config, lister?: SessionLister): ServerDeps => {
+  // pi uses workingDir as the session cwd and as the SessionManager dir. If it
+  // doesn't exist, every bash tool call and session write fails with
+  // "Working directory does not exist". Create it where the deps are built so
+  // every entry point (serve + the e2e harness) is covered.
+  mkdirSync(cfg.workingDir, { recursive: true });
+
   const resolveSessionFile = (sessionId: string): Promise<string> =>
     sessionFileFor(cfg, sessionId, lister);
   return {
@@ -50,11 +56,6 @@ export const buildServerDeps = (cfg: Config, lister?: SessionLister): ServerDeps
 };
 
 export const startServer = async (cfg: Config): Promise<void> => {
-  // pi uses workingDir as the session cwd and as the SessionManager dir. If it
-  // doesn't exist, every bash tool call and session write fails with
-  // "Working directory does not exist". Create it up front.
-  mkdirSync(cfg.workingDir, { recursive: true });
-
   if (shouldVerifyConfigDir()) {
     try {
       verifyConfigDir(cfg);
