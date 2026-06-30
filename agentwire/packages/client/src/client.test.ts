@@ -8,7 +8,7 @@ class FakeSocket {
   closed = false;
   onmessage: ((ev: { data: string }) => void) | null = null;
   onerror: ((ev: unknown) => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((ev?: { code?: number; reason?: string }) => void) | null = null;
   constructor(readonly url: string) {}
   send(d: string): void {
     this.sent.push(d);
@@ -18,6 +18,12 @@ class FakeSocket {
   }
   emit(frame: ServerOutboundFrame): void {
     this.onmessage?.({ data: JSON.stringify(frame) });
+  }
+  fail(): void {
+    this.onerror?.({});
+  }
+  serverClose(code: number): void {
+    this.onclose?.({ code });
   }
 }
 
@@ -72,6 +78,37 @@ describe("createClient ws", () => {
     expect(sockets[0]!.url).toBe(
       "ws://localhost:8080/sessions/ws?token=tok&session_id=prev",
     );
+  });
+
+  it("connect() rejects naming the token cause when the server closes (auth 4401)", async () => {
+    const { sockets, factory } = makeSocketFactory();
+    const client = createClient({ ...opts, webSocketFactory: factory as never });
+    const p = client.connect();
+    sockets[0]!.serverClose(4401);
+    await expect(p).rejects.toThrow(/bearer token.*SERVER_BEARER_TOKENS/i);
+  });
+
+  it("connect() rejects with a real Error (not [object Event]) and names likely causes", async () => {
+    const { sockets, factory } = makeSocketFactory();
+    const client = createClient({ ...opts, webSocketFactory: factory as never });
+    const p = client.connect();
+    sockets[0]!.fail();
+    await expect(p).rejects.toThrow(/could not connect.*token.*not running/is);
+  });
+
+  it("connect() rejects only once even if error and close both fire", async () => {
+    const { sockets, factory } = makeSocketFactory();
+    const client = createClient({ ...opts, webSocketFactory: factory as never });
+    const p = client.connect();
+    sockets[0]!.fail();
+    sockets[0]!.serverClose(1006); // second signal must be a no-op
+    await expect(p).rejects.toThrow(/could not connect/i);
+  });
+
+  it("a close AFTER session_ready does not reject the resolved connect", async () => {
+    const { client, socket } = await connected();
+    socket.serverClose(1000); // must not throw / unhandled-reject
+    expect(client.sessionId()).toBe("s1");
   });
 
   it("prompt sends exact frame with thinking", async () => {

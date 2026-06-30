@@ -49,7 +49,7 @@
     </div>
     <div style="flex: 2 1 200px;">
       <label for="token">Bearer token</label>
-      <input id="token" placeholder="devtoken" />
+      <input id="token" placeholder="your SERVER_BEARER_TOKENS value" />
     </div>
     <div style="flex: 0 0 auto; align-self: flex-end;">
       <button id="connectBtn">Connect</button>
@@ -122,6 +122,11 @@
       }
       const baseUrl = baseUrlEl.value.trim();
       const token = tokenEl.value.trim();
+      if (!token) {
+        setStatus("Enter a bearer token (it must match the server's SERVER_BEARER_TOKENS).");
+        connectBtn.disabled = false;
+        return;
+      }
       setStatus("Connecting…");
       connectBtn.disabled = true;
       try {
@@ -129,8 +134,9 @@
         wire(client);
         await client.connect();
       } catch (err) {
-        setStatus("Connect failed: " + (err && err.message ? err.message : String(err)));
-        append("\n[connect failed] " + String(err) + "\n", "err");
+        const msg = err && err.message ? err.message : String(err);
+        setStatus("Connect failed: " + msg);
+        append("\n[connect failed] " + msg + "\n", "err");
       } finally {
         connectBtn.disabled = false;
       }

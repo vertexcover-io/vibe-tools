@@ -12,7 +12,7 @@ interface SocketLike {
   close(): void;
   onmessage: ((ev: { data: string }) => void) | null;
   onerror: ((ev: unknown) => void) | null;
-  onclose: (() => void) | null;
+  onclose: ((ev?: { code?: number; reason?: string }) => void) | null;
 }
 
 export interface ClientOptions {
@@ -85,15 +85,38 @@ export const createClient = (opts: ClientOptions): AgentClient => {
         const url = wsUrl(opts.baseUrl, opts.token, connectOpts?.sessionId);
         const sock = makeSocket(url);
         socket = sock;
+        let ready = false;
+        let settled = false;
+        // The server rejects a bad/absent bearer by destroying the upgrade with a
+        // 4401 status. Browsers do NOT expose that status to script — the failed
+        // handshake surfaces only as a generic `error` (and/or a `close` with code
+        // 1006), with no way to distinguish "wrong token" from "server down". So
+        // the rejection names the two real causes rather than guessing one.
+        const failed = (detail: string): void => {
+          if (ready || settled) return;
+          settled = true;
+          reject(
+            new Error(
+              `could not connect to ${url} (${detail}). ` +
+                `The server refused or dropped the WebSocket upgrade — most likely ` +
+                `the bearer token does not match the server's SERVER_BEARER_TOKENS, ` +
+                `or the agentwire server is not running at that address.`,
+            ),
+          );
+        };
         sock.onmessage = (ev): void => {
           const frame = JSON.parse(ev.data) as ServerOutboundFrame;
           if (frame.type === "session_ready") {
             sid = frame.session_id;
+            ready = true;
+            settled = true;
             resolve();
           }
           dispatch(frame);
         };
-        sock.onerror = (err): void => reject(err);
+        sock.onerror = (): void => failed("connection error");
+        sock.onclose = (ev): void =>
+          failed(`closed before session_ready, code ${ev?.code ?? "unknown"}`);
       }),
 
     on: (type, handler) => {
