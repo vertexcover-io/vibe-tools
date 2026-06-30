@@ -2,11 +2,11 @@
 
 **Agent:** Claude Code, model Opus 4.8 (1M context).
 
-This package is built phase-by-phase from a harness spec/plan:
+This monorepo is built phase-by-phase from a harness spec/plan:
 
-- Spec: `.harness/features/claude-session-server/spec.md`
-- Plan: `.harness/features/claude-session-server/plan.md`
-- Phase files: `.harness/runtime/claude-session-server/phase-*.md`
+- Spec: `.harness/features/agentwire-monorepo/spec.md`
+- Plan: `.harness/features/agentwire-monorepo/plan.md`
+- Phase files: `.harness/runtime/agentwire-monorepo/phase-*.md`
 
 ## Phase 1
 

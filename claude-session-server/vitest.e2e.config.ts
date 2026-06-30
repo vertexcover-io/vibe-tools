@@ -6,7 +6,7 @@ import { defineConfig } from "vitest/config";
 // subscription. Invoked via `npm run test:e2e`.
 export default defineConfig({
   test: {
-    include: ["src/e2e/**/*.e2e.test.ts"],
+    include: ["{packages,apps}/**/src/e2e/**/*.e2e.test.ts"],
     testTimeout: 300000,
     hookTimeout: 60000,
     fileParallelism: false,
