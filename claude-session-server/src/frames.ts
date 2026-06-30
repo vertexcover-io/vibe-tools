@@ -71,6 +71,7 @@ export type ServerOutboundFrame =
       isError: boolean;
     }
   | { type: "turn_end"; usage: unknown }
+  | { type: "truncated" }
   | { type: "error"; code: ErrorCode; message: string };
 
 export type ParseResult =

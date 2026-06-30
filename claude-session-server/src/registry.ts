@@ -16,6 +16,7 @@ export interface SessionEntry {
   busy: boolean;
   lastTurnAt: number;
   readonly buffer: RingBuffer<ServerFrame>;
+  onDispose?: () => void;
 }
 
 export class AtCapacityError extends Error {
@@ -108,6 +109,7 @@ export class SessionRegistry {
   dispose(id: string): void {
     const entry = this.entries.get(id);
     if (entry === undefined) return;
+    entry.onDispose?.();
     entry.session.dispose();
     this.entries.delete(id);
   }

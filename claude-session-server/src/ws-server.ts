@@ -4,9 +4,9 @@ import type { Duplex } from "node:stream";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { Config } from "./config.ts";
-import { SessionRegistry, SessionBusyError, AtCapacityError } from "./registry.ts";
+import { SessionRegistry, SessionBusyError, AtCapacityError, type WSLike } from "./registry.ts";
 import { createPromptScheduler } from "./scheduler.ts";
-import { toServerFrame } from "./pi-adapter.ts";
+import { toServerFrame, type ServerFrame } from "./pi-adapter.ts";
 import {
   parseInboundFrame,
   serializeOutbound,
@@ -56,8 +56,7 @@ const send = (ws: WebSocket, frame: ServerOutboundFrame): void => {
   ws.send(serializeOutbound(frame));
 };
 
-const toOutbound = (event: AgentSessionEvent): ServerOutboundFrame | null => {
-  const frame = toServerFrame(event);
+const serverFrameToOutbound = (frame: ServerFrame): ServerOutboundFrame | null => {
   switch (frame.type) {
     case "text_delta":
       return { type: "text_delta", delta: frame.delta };
@@ -146,6 +145,68 @@ const handleInbound = (
   }
 };
 
+const isLiveSocket = (ws: WSLike | null): ws is WebSocket =>
+  ws !== null && (ws as WebSocket).readyState === (ws as WebSocket).OPEN;
+
+const attachWsToEntry = (deps: WsDeps, session: PiSessionLike, ws: WebSocket): void => {
+  const scheduler = createPromptScheduler();
+
+  ws.on("message", (data: Buffer) => {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(data.toString());
+    } catch {
+      return;
+    }
+    const result = parseInboundFrame(parsed);
+    if (!result.ok) return;
+    handleInbound(ws, deps, scheduler, session, result.frame);
+  });
+
+  ws.on("close", () => {
+    // Only detach if this socket is still the entry's current socket — a
+    // superseding reconnect may have already swapped in a newer one (EDGE-013).
+    const entry = deps.registry.get(session.sessionId);
+    if (entry?.ws === ws) deps.registry.detach(session.sessionId);
+  });
+};
+
+// Persistent per-entry subscriber: routes pi events to the entry's current
+// live socket, or buffers them while detached (REQ-015 / EDGE-014).
+const subscribeEntry = (deps: WsDeps, session: PiSessionLike): (() => void) =>
+  session.subscribe((event) => {
+    const frame = toServerFrame(event);
+    const entry = deps.registry.get(session.sessionId);
+    if (entry === undefined) return;
+    if (isLiveSocket(entry.ws)) {
+      const outbound = serverFrameToOutbound(frame);
+      if (outbound !== null) send(entry.ws, outbound);
+      return;
+    }
+    entry.buffer.push(frame);
+  });
+
+const replayBuffer = (deps: WsDeps, id: string, ws: WebSocket): void => {
+  const entry = deps.registry.get(id);
+  if (entry === undefined) return;
+  const { frames, truncated } = entry.buffer.drain();
+  if (truncated) send(ws, { type: "truncated" });
+  for (const frame of frames) {
+    const outbound = serverFrameToOutbound(frame);
+    if (outbound !== null) send(ws, outbound);
+  }
+};
+
+const reattach = (deps: WsDeps, session: PiSessionLike, ws: WebSocket): void => {
+  const entry = deps.registry.get(session.sessionId)!;
+  const stale = entry.ws;
+  deps.registry.attach(session.sessionId, ws);
+  if (stale !== null && stale !== ws) (stale as WebSocket).terminate();
+  attachWsToEntry(deps, session, ws);
+  send(ws, { type: "session_ready", session_id: session.sessionId });
+  replayBuffer(deps, session.sessionId, ws);
+};
+
 const onConnection = async (
   ws: WebSocket,
   req: IncomingMessage,
@@ -167,45 +228,41 @@ const onConnection = async (
 
   const existing = deps.registry.get(session.sessionId);
   if (existing !== undefined) {
-    deps.registry.attach(session.sessionId, ws);
-  } else {
-    try {
-      deps.registry.add(session.sessionId, session, ws);
-    } catch (error) {
-      if (error instanceof AtCapacityError) {
-        send(ws, { type: "error", code: "at_capacity", message: error.message });
-        ws.close();
-        return;
-      }
-      throw error;
-    }
-  }
-  const scheduler = createPromptScheduler();
-
-  const unsubscribe = session.subscribe((event) => {
-    const outbound = toOutbound(event);
-    if (outbound !== null && ws.readyState === ws.OPEN) send(ws, outbound);
-  });
-
-  ws.on("message", (data: Buffer) => {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(data.toString());
-    } catch {
+    if (isLiveSocket(existing.ws)) {
+      send(ws, {
+        type: "error",
+        code: "session_in_use",
+        message: `session ${session.sessionId} already attached`,
+      });
+      ws.close();
       return;
     }
-    const result = parseInboundFrame(parsed);
-    if (!result.ok) return;
-    handleInbound(ws, deps, scheduler, session, result.frame);
-  });
+    reattach(deps, session, ws);
+    return;
+  }
 
-  ws.on("close", () => {
-    unsubscribe();
-    deps.registry.detach(session.sessionId);
-  });
+  try {
+    deps.registry.add(session.sessionId, session, ws);
+  } catch (error) {
+    if (error instanceof AtCapacityError) {
+      send(ws, { type: "error", code: "at_capacity", message: error.message });
+      ws.close();
+      return;
+    }
+    throw error;
+  }
 
+  const unsubscribe = subscribeEntry(deps, session);
+  deps.registry.get(session.sessionId)!.onDispose = unsubscribe;
+  attachWsToEntry(deps, session, ws);
   send(ws, { type: "session_ready", session_id: session.sessionId });
 };
+
+const HEARTBEAT_MS = 30000;
+
+interface HeartbeatSocket extends WebSocket {
+  isAlive?: boolean;
+}
 
 export const attachWsServer = (httpServer: Server, deps: WsDeps): WebSocketServer => {
   const wss = new WebSocketServer({ noServer: true });
@@ -222,9 +279,30 @@ export const attachWsServer = (httpServer: Server, deps: WsDeps): WebSocketServe
       return;
     }
     wss.handleUpgrade(req, socket, head, (ws) => {
+      const hb = ws as HeartbeatSocket;
+      hb.isAlive = true;
+      ws.on("pong", () => {
+        hb.isAlive = true;
+      });
       void onConnection(ws, req, deps);
     });
   });
+
+  // Dead-socket detection: terminate sockets that miss a pong, which fires
+  // the entry's close handler → detach (EDGE-013).
+  const heartbeat = setInterval(() => {
+    for (const client of wss.clients) {
+      const hb = client as HeartbeatSocket;
+      if (hb.isAlive === false) {
+        hb.terminate();
+        continue;
+      }
+      hb.isAlive = false;
+      hb.ping();
+    }
+  }, HEARTBEAT_MS);
+  heartbeat.unref?.();
+  wss.on("close", () => clearInterval(heartbeat));
 
   return wss;
 };
