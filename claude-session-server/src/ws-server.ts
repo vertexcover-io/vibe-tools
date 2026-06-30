@@ -92,6 +92,17 @@ const serverFrameToOutbound = (frame: ServerFrame): ServerOutboundFrame | null =
   }
 };
 
+// Map a failed pi turn to a typed error code. A 429/overloaded surfaces as
+// rate_limited (REQ-024); any other mid-turn failure (e.g. a token refresh that
+// fails because the Keychain is locked/expired) surfaces as auth_error
+// (EDGE-003). Both keep the session hot and resumable.
+const turnErrorCode = (error: unknown): "rate_limited" | "auth_error" => {
+  const message = error instanceof Error ? error.message : String(error);
+  return /\b429\b|overloaded|rate.?limit/i.test(message)
+    ? "rate_limited"
+    : "auth_error";
+};
+
 const handlePrompt = (
   ws: WebSocket,
   registry: SessionRegistry,
@@ -111,15 +122,29 @@ const handlePrompt = (
 
   if (frame.thinking !== undefined) session.setThinkingLevel(frame.thinking);
 
-  scheduler.schedule(async () => {
-    try {
-      await session.prompt(frame.text);
-    } finally {
-      if (registry.get(session.sessionId) !== undefined) {
-        registry.clearBusy(session.sessionId, Date.now());
+  scheduler.schedule(
+    async () => {
+      try {
+        await session.prompt(frame.text);
+      } finally {
+        if (registry.get(session.sessionId) !== undefined) {
+          registry.clearBusy(session.sessionId, Date.now());
+        }
       }
-    }
-  });
+    },
+    (error) => {
+      // Route the failure to the entry's current live socket (the prompting
+      // socket may have detached) — the session stays hot and resumable.
+      const entry = registry.get(session.sessionId);
+      const target = isLiveSocket(entry?.ws ?? null) ? (entry!.ws as WebSocket) : ws;
+      const code = turnErrorCode(error);
+      send(target, {
+        type: "error",
+        code,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    },
+  );
 };
 
 const handleInbound = (

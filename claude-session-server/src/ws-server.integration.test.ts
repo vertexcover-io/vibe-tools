@@ -15,6 +15,7 @@ const cfg = loadConfig({ SERVER_BEARER_TOKENS: TOKEN, MAX_HOT: "5" });
 interface ScriptedSession extends PiSessionLike {
   emit(event: AgentSessionEvent): void;
   resolveTurn(): void;
+  rejectTurn(error: unknown): void;
   calls: { steer: string[]; followUp: string[]; aborted: number; thinking: string[] };
   promptText: string | null;
 }
@@ -22,6 +23,7 @@ interface ScriptedSession extends PiSessionLike {
 const makeScriptedSession = (id: string): ScriptedSession => {
   const listeners = new Set<(e: AgentSessionEvent) => void>();
   let resolveCurrent: (() => void) | null = null;
+  let rejectCurrent: ((error: unknown) => void) | null = null;
   const calls = { steer: [] as string[], followUp: [] as string[], aborted: 0, thinking: [] as string[] };
 
   return {
@@ -38,8 +40,9 @@ const makeScriptedSession = (id: string): ScriptedSession => {
     },
     async prompt(text) {
       this.promptText = text;
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, reject) => {
         resolveCurrent = resolve;
+        rejectCurrent = reject;
       });
     },
     async steer(text) {
@@ -58,6 +61,12 @@ const makeScriptedSession = (id: string): ScriptedSession => {
     resolveTurn() {
       resolveCurrent?.();
       resolveCurrent = null;
+      rejectCurrent = null;
+    },
+    rejectTurn(error) {
+      rejectCurrent?.(error);
+      resolveCurrent = null;
+      rejectCurrent = null;
     },
   };
 };
@@ -315,6 +324,37 @@ describe("WS session protocol", () => {
     session.emit({ type: "turn_end", message: { usage: {} }, toolResults: [] } as unknown as AgentSessionEvent);
     session.resolveTurn();
     expect((await end).type).toBe("turn_end");
+    ws.close();
+  });
+
+  it("test_REQ_024_rate_limited_frame_on_429: 429/overloaded mid-turn → rate_limited, session stays hot, busy cleared", async () => {
+    const ws = connect();
+    await nextFrame(ws, (f) => f.type === "session_ready");
+    const session = created[0]!;
+    ws.send(JSON.stringify({ type: "prompt", text: "go" }));
+    await waitFor(() => session.promptText === "go");
+
+    const err = nextFrame(ws, (f) => f.type === "error");
+    session.rejectTurn(new Error("Request failed: 429 overloaded_error"));
+    expect((await err).code).toBe("rate_limited");
+
+    // Session stays hot and is no longer busy — a follow-up prompt is accepted.
+    await waitFor(() => registry.get("sess-1")?.busy === false);
+    expect(registry.get("sess-1")).toBeDefined();
+    ws.close();
+  });
+
+  it("test_EDGE_003_auth_error_frame: non-rate-limit turn failure → auth_error", async () => {
+    const ws = connect();
+    await nextFrame(ws, (f) => f.type === "session_ready");
+    const session = created[0]!;
+    ws.send(JSON.stringify({ type: "prompt", text: "go" }));
+    await waitFor(() => session.promptText === "go");
+
+    const err = nextFrame(ws, (f) => f.type === "error");
+    session.rejectTurn(new Error("token refresh failed: keychain locked"));
+    expect((await err).code).toBe("auth_error");
+    await waitFor(() => registry.get("sess-1")?.busy === false);
     ws.close();
   });
 

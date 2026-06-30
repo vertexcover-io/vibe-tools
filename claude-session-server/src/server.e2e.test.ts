@@ -2,8 +2,9 @@ import { describe, it, expect } from "vitest";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { WebSocket } from "ws";
-import { startServer } from "./server.ts";
+import { startServer, buildServerDeps } from "./server.ts";
 import { loadConfig } from "./config.ts";
+import type { SessionInfoLike } from "./pi-rest-adapter.ts";
 
 const TOKEN = "e2e-token";
 
@@ -50,5 +51,33 @@ describe("e2e: real http + ws server boots via startServer", () => {
       ws.on("unexpected-response", () => resolve("rejected"));
     });
     expect(rejected).toBe("rejected");
+  });
+
+  it("test_gap1_serve_wires_real_adapter: REST + WS resume resolve sessions via SessionManager.list, not a constructed path", async () => {
+    const cfg = loadConfig({ SERVER_BEARER_TOKENS: TOKEN, PI_WORKING_DIR: "/work" });
+    const info: SessionInfoLike = {
+      id: "abc",
+      path: "/home/.pi/agent/sessions/enc/123_abc.jsonl",
+      firstMessage: "hi",
+      modified: new Date(5),
+      messageCount: 3,
+    };
+    const lister = async (cwd: string): Promise<readonly SessionInfoLike[]> => {
+      expect(cwd).toBe("/work");
+      return [info];
+    };
+
+    const deps = buildServerDeps(cfg, lister);
+
+    // REST adapter is the real pi-backed one: it lists the on-disk session.
+    const listed = await deps.restAdapter.listSessions(50);
+    expect(listed.sessions.map((s) => s.id)).toEqual(["abc"]);
+
+    // WS openSession resolves the id to its REAL on-disk path (from list),
+    // never <workingDir>/.pi/sessions/<id>.jsonl. We stop before touching pi
+    // by intercepting the file path the adapter would open.
+    const resolvedFile = await deps.resolveSessionFile("abc");
+    expect(resolvedFile).toBe("/home/.pi/agent/sessions/enc/123_abc.jsonl");
+    await expect(deps.resolveSessionFile("missing")).rejects.toThrow(/not found/);
   });
 });

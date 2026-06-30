@@ -11,6 +11,11 @@ import {
   createSession as piCreateSession,
   openSession as piOpenSession,
 } from "./pi-adapter.ts";
+import {
+  buildPiRestAdapter,
+  sessionFileFor,
+  type SessionLister,
+} from "./pi-rest-adapter.ts";
 
 const REAP_TICK_MS = 30000;
 
@@ -19,18 +24,30 @@ const REAP_TICK_MS = 30000;
 const shouldVerifyConfigDir = (): boolean =>
   existsSync(resolve(PKG_DIR, "settings.json"));
 
-const piSessionPath = (cfg: Config, sessionId: string): string =>
-  resolve(cfg.workingDir, ".pi", "sessions", `${sessionId}.jsonl`);
+export interface ServerDeps {
+  readonly restAdapter: RestAdapter;
+  resolveSessionFile(sessionId: string): Promise<string>;
+  createSession(): Promise<PiSessionLike>;
+  openSession(sessionId: string): Promise<PiSessionLike>;
+}
 
-const buildRestAdapter = (): RestAdapter => ({
-  complete: async () => {
-    throw new Error("complete not implemented in this phase");
-  },
-  listSessions: async () => ({ sessions: [], nextCursor: null }),
-  loadMessages: async () => null,
-  fork: async () => "invalid_fork_point",
-  remove: async () => {},
-});
+// Wire the live pi-backed adapter (the same one the e2e harness exercises) and
+// resolve resume targets via SessionManager.list — pi's real on-disk layout is
+// ~/.pi/agent/sessions/<encoded-cwd>/<ts>_<id>.jsonl, so a session file MUST be
+// looked up, never constructed from the working dir.
+export const buildServerDeps = (cfg: Config, lister?: SessionLister): ServerDeps => {
+  const resolveSessionFile = (sessionId: string): Promise<string> =>
+    sessionFileFor(cfg, sessionId, lister);
+  return {
+    restAdapter: buildPiRestAdapter(cfg, lister),
+    resolveSessionFile,
+    createSession: () => piCreateSession(cfg) as Promise<PiSessionLike>,
+    openSession: async (sessionId: string) => {
+      const file = await resolveSessionFile(sessionId);
+      return piOpenSession(cfg, file) as Promise<PiSessionLike>;
+    },
+  };
+};
 
 export const startServer = async (cfg: Config): Promise<void> => {
   if (shouldVerifyConfigDir()) {
@@ -42,21 +59,24 @@ export const startServer = async (cfg: Config): Promise<void> => {
   }
 
   const registry = new SessionRegistry({ maxHot: cfg.maxHot, idleMs: cfg.idleMs });
+  const deps = buildServerDeps(cfg);
 
-  const httpServer = createRestServer({ cfg, adapter: buildRestAdapter() });
+  const httpServer = createRestServer({ cfg, adapter: deps.restAdapter });
 
   attachWsServer(httpServer, {
     cfg,
     registry,
-    createSession: () => piCreateSession(cfg) as Promise<PiSessionLike>,
-    openSession: (sessionId: string) =>
-      piOpenSession(cfg, piSessionPath(cfg, sessionId)) as Promise<PiSessionLike>,
+    createSession: deps.createSession,
+    openSession: deps.openSession,
   });
 
   const reaper = setInterval(() => registry.reapIdle(Date.now()), REAP_TICK_MS);
   reaper.unref?.();
 
-  httpServer.on("close", () => clearInterval(reaper));
+  httpServer.on("close", () => {
+    clearInterval(reaper);
+    registry.disposeAll();
+  });
 
   await new Promise<void>((resolveListen) => {
     httpServer.listen(cfg.port, () => resolveListen());
