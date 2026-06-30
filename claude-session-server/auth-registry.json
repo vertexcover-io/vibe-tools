@@ -1,0 +1,5 @@
+[
+  { "name": "linear", "authKind": "api-key", "flow": "linear-auth" },
+  { "name": "notion", "authKind": "mcp-oauth", "flow": "mcp-auth notion" },
+  { "name": "gmail", "authKind": "google-oauth", "flow": "gmail-consent" }
+]

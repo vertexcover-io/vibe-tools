@@ -1,0 +1,8 @@
+{
+  "packages": [
+    "pi-mono-linear",
+    "@e9n/pi-gmail",
+    "pi-agent-browser-native",
+    "pi-mcp-adapter"
+  ]
+}

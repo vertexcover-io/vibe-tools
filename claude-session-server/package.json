@@ -4,9 +4,14 @@
   "private": true,
   "type": "module",
   "description": "WS + REST server exposing pi AgentSessions backed by the host Claude subscription",
+  "bin": {
+    "claude-session-server": "src/bin.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "init": "tsx src/bin.ts init",
+    "serve": "tsx src/bin.ts serve"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.79.9",
