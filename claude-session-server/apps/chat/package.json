@@ -1,0 +1,19 @@
+{
+  "name": "agentwire-chat",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/chat.ts",
+  "bin": {
+    "agentwire-chat": "src/chat.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "chat": "tsx src/chat.ts",
+    "start": "tsx src/chat.ts"
+  },
+  "dependencies": {
+    "@agentwire/client": "*",
+    "@agentwire/protocol": "*"
+  }
+}

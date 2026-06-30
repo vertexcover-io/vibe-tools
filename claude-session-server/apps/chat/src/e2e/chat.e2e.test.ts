@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const AGENT_DIR = resolve(homedir(), ".pi", "agent");
 const noClaudeCreds = !existsSync(resolve(AGENT_DIR, "auth.json"));
-const BIN = resolve(fileURLToPath(new URL(".", import.meta.url)), "..", "bin.ts");
+const CHAT_ENTRY = resolve(fileURLToPath(new URL(".", import.meta.url)), "..", "chat.ts");
 
 const stripAnsi = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -35,7 +35,7 @@ const driveChat = (steps: readonly Step[], env: Record<string, string> = {}): Pr
   new Promise((resolveRun, rejectRun) => {
     const child: ChildProcessWithoutNullStreams = spawn(
       "npx",
-      ["tsx", BIN, "chat"],
+      ["tsx", CHAT_ENTRY],
       { env: { ...process.env, ...env } },
     );
     let out = "";

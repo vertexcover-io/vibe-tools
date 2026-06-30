@@ -1,17 +1,22 @@
 // AI-generated. See PROMPT.md for the prompts and model used.
 //
-// Interactive chat REPL over the Claude Session Server, in the spirit of the
-// pi agent CLI: stream text live, toggle thinking, manage sessions with slash
+// Interactive chat REPL over the Agentwire server, in the spirit of the pi
+// agent CLI: stream text live, toggle thinking, manage sessions with slash
 // commands, multi-turn conversation, Ctrl-C to interrupt the current turn.
 //
 // By default it auto-starts the server in the background on a free port and
 // shuts it down on exit; --connect <ws-url> attaches to a running server.
+//
+// Session transport (WS + REST) runs through @agentwire/client; the node:*
+// imports below are the CLI shell only (spawn the server, read the terminal,
+// pick a free port).
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import * as readline from "node:readline";
-import { WebSocket } from "ws";
+import { createClient, type AgentClient } from "@agentwire/client";
+import type { ThinkingLevel } from "@agentwire/protocol";
 
 const C = {
   dim: (s: string): string => `\x1b[2m${s}\x1b[0m`,
@@ -50,10 +55,17 @@ interface ChatOptions {
   showTools?: boolean;
 }
 
-interface Frame {
-  readonly type: string;
-  readonly [key: string]: unknown;
-}
+const THINKING_LEVELS: readonly ThinkingLevel[] = [
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+];
+
+const isThinkingLevel = (v: string): v is ThinkingLevel =>
+  (THINKING_LEVELS as readonly string[]).includes(v);
 
 const freePort = (): Promise<number> =>
   new Promise((res, rej) => {
@@ -86,17 +98,18 @@ const waitForHealth = async (base: string, token: string, ms: number): Promise<v
 };
 
 interface ServerHandle {
-  wsBase: string;
-  httpBase: string;
+  baseUrl: string;
   token: string;
   stop(): void;
 }
 
 const startBackgroundServer = async (token: string): Promise<ServerHandle> => {
   const port = await freePort();
+  // The server app's bin lives at apps/server/src/bin.ts. From apps/chat/src/
+  // that resolves up two levels into the server app.
   const here = dirname(fileURLToPath(import.meta.url));
-  const binPath = resolve(here, "bin.ts");
-  const child: ChildProcess = spawn("npx", ["tsx", binPath, "serve"], {
+  const serverBin = resolve(here, "..", "..", "server", "src", "bin.ts");
+  const child: ChildProcess = spawn("npx", ["tsx", serverBin, "serve"], {
     // detached → the server runs in its OWN process group, so a terminal Ctrl-C
     // (SIGINT to the foreground group) does NOT hit it. The REPL stays in
     // control of Ctrl-C; we kill the server explicitly on exit (stop()).
@@ -105,12 +118,11 @@ const startBackgroundServer = async (token: string): Promise<ServerHandle> => {
     stdio: ["ignore", "ignore", "inherit"], // surface server warnings on stderr
   });
   child.unref(); // don't keep the REPL alive on the server child
-  const httpBase = `http://127.0.0.1:${port}`;
+  const baseUrl = `http://127.0.0.1:${port}`;
   process.stdout.write(C.dim(`starting server on :${port} …\n`));
-  await waitForHealth(httpBase, token, 30000);
+  await waitForHealth(baseUrl, token, 30000);
   return {
-    wsBase: `ws://127.0.0.1:${port}`,
-    httpBase,
+    baseUrl,
     token,
     // Kill the server's whole process group (negative pid) since it's detached.
     stop: () => {
@@ -121,97 +133,6 @@ const startBackgroundServer = async (token: string): Promise<ServerHandle> => {
           child.kill();
         }
       }
-    },
-  };
-};
-
-interface RestClient {
-  listSessions(): Promise<{ sessions: { id: string; title?: string; messageCount?: number }[] }>;
-}
-
-const restClient = (httpBase: string, token: string): RestClient => ({
-  listSessions: async () => {
-    const res = await fetch(`${httpBase}/sessions?limit=20`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return (await res.json()) as Awaited<ReturnType<RestClient["listSessions"]>>;
-  },
-});
-
-// A single live WS connection bound to one session. Replaced on /new and /resume.
-interface Conn {
-  ws: WebSocket;
-  sessionId?: string;
-  prompt(text: string, thinking: string): void;
-  followUp(text: string): void;
-  abort(): void;
-  close(): void;
-}
-
-const openConn = (
-  wsBase: string,
-  token: string,
-  sessionId: string | undefined,
-  handlers: {
-    onReady: (id: string) => void;
-    onText: (delta: string) => void;
-    onThinking: (delta: string) => void;
-    onTool: (name: string, args: unknown) => void;
-    onTurnEnd: (usage: unknown) => void;
-    onError: (code: string, message: string) => void;
-    onClose: () => void;
-  },
-): Conn => {
-  const q = new URLSearchParams({ token });
-  if (sessionId !== undefined) q.set("session_id", sessionId);
-  const ws = new WebSocket(`${wsBase}/sessions/ws?${q.toString()}`);
-  let sid = sessionId;
-
-  ws.on("message", (data: Buffer) => {
-    const f = JSON.parse(data.toString()) as Frame;
-    switch (f.type) {
-      case "session_ready":
-        sid = f.session_id as string;
-        handlers.onReady(sid);
-        break;
-      case "text_delta":
-        handlers.onText(String(f.delta));
-        break;
-      case "thinking_delta":
-        handlers.onThinking(String(f.delta));
-        break;
-      case "tool_execution_start":
-        handlers.onTool(String(f.toolName), f.args);
-        break;
-      case "turn_end":
-        handlers.onTurnEnd(f.usage);
-        break;
-      case "error":
-        handlers.onError(String(f.code), String(f.message));
-        break;
-      default:
-        break;
-    }
-  });
-  ws.on("error", (err) => handlers.onError("ws_error", String(err)));
-  ws.on("close", () => handlers.onClose());
-
-  return {
-    ws,
-    get sessionId() {
-      return sid;
-    },
-    prompt: (text, thinking): void => {
-      ws.send(JSON.stringify({ type: "prompt", text, thinking }));
-    },
-    followUp: (text): void => {
-      ws.send(JSON.stringify({ type: "follow_up", text }));
-    },
-    abort: (): void => {
-      ws.send(JSON.stringify({ type: "abort" }));
-    },
-    close: (): void => {
-      ws.close();
     },
   };
 };
@@ -234,43 +155,88 @@ ${C.cyan("commands")}
 export const runChat = async (opts: ChatOptions): Promise<void> => {
   const token = opts.token ?? (opts.connect !== undefined ? "secret123" : "css-chat-token");
   let server: ServerHandle | undefined;
-  let wsBase: string;
-  let httpBase: string;
+  let baseUrl: string;
 
   if (opts.connect !== undefined) {
-    wsBase = opts.connect.replace(/\/$/, "");
-    httpBase = wsBase.replace(/^ws/, "http");
+    // --connect takes a ws(s) URL; the SDK wants an http(s) baseUrl and
+    // re-derives the ws endpoint internally.
+    baseUrl = opts.connect.replace(/\/$/, "").replace(/^ws/, "http");
   } else {
     server = await startBackgroundServer(token);
-    wsBase = server.wsBase;
-    httpBase = server.httpBase;
+    baseUrl = server.baseUrl;
   }
 
-  const rest = restClient(httpBase, token);
-  // Thinking level always requested at "medium" so the model reasons; the
-  // toggles below only control what is DISPLAYED, never the model's behavior.
-  let thinking = opts.thinking ?? "medium";
-  let showThinking = false; // /thinking on|off — display only
-  let showTools = opts.showTools ?? true; // /bash on|off (tool lines) — display only
+  // Thinking level always requested so the model reasons; the toggles below
+  // only control what is DISPLAYED, never the model's behavior.
+  let thinking: ThinkingLevel = isThinkingLevel(opts.thinking ?? "")
+    ? (opts.thinking as ThinkingLevel)
+    : "medium";
+  let showThinking = false; // /show-thinking on|off — display only
+  let showTools = opts.showTools ?? true; // /tools on|off (tool lines) — display only
   let busy = false;
   let streamedThisTurn = false;
   let ready = false;
-  let pending: string | undefined; // a prompt typed before the WS was ready
+  let pending: string | undefined; // a prompt typed before the session was ready
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   // Human input is green; the prompt arrow is the only chrome. Agent output and
   // tool lines get their own colors — no "you"/"agent" labels needed.
   const setPrompt = (): void => rl.setPrompt(C.green("▸ "));
 
+  let closed = false; // set once shutdown begins — silences late async callbacks
+  let client: AgentClient = createClient({ baseUrl, token });
+
   const sendPrompt = (text: string): void => {
     busy = true;
-    conn.prompt(text, thinking);
+    client.prompt(text, { thinking });
   };
 
-  const makeHandlers = () => ({
-    onReady: (id: string): void => {
+  // Register the streaming subscriptions on the current client and open the
+  // session. Resolves once the server reports session_ready.
+  const connectSession = async (sessionId?: string): Promise<void> => {
+    client.on("text_delta", (f): void => {
+      if (!streamedThisTurn) {
+        // Blank line above the agent block (Claude-Code-style separation), then
+        // agent text in cyan. No "agent" label — color is the differentiator.
+        process.stdout.write("\n");
+        streamedThisTurn = true;
+      }
+      process.stdout.write(C.cyan(f.delta));
+    });
+
+    client.on("thinking_delta", (f): void => {
+      if (showThinking) process.stdout.write(C.dim(f.delta));
+    });
+
+    client.on("tool_execution_start", (f): void => {
+      if (!showTools) return; // display filter only — the agent still runs the tool
+      const summary = summarizeToolArgs(f.args);
+      process.stdout.write(
+        "\n" + C.yellow(`⚙ ${f.toolName}`) + (summary !== "" ? C.dim(`  ${summary}`) : "") + "\n",
+      );
+    });
+
+    client.on("turn_end", (): void => {
+      if (closed) return;
+      // Blank line below the agent block → clear gap before the next prompt.
+      process.stdout.write("\n\n");
+      busy = false;
+      streamedThisTurn = false;
+      rl.prompt();
+    });
+
+    client.on("error", (f): void => {
+      if (closed) return;
+      process.stdout.write(C.red(`\n[${f.code}] ${f.message}\n`));
+      busy = false;
+      streamedThisTurn = false;
+      rl.prompt();
+    });
+
+    client.on("session_ready", (f): void => {
+      if (closed) return; // /quit raced ahead of the ready frame (piped input)
       ready = true;
-      process.stdout.write(C.dim(`session ${id}\n`));
+      process.stdout.write(C.dim(`session ${f.session_id}\n`));
       if (pending !== undefined) {
         const text = pending;
         pending = undefined;
@@ -278,56 +244,24 @@ export const runChat = async (opts: ChatOptions): Promise<void> => {
       } else {
         rl.prompt();
       }
-    },
-    onText: (delta: string): void => {
-      if (!streamedThisTurn) {
-        // Blank line above the agent block (Claude-Code-style separation), then
-        // agent text in cyan. No "agent" label — color is the differentiator.
-        process.stdout.write("\n");
-        streamedThisTurn = true;
-      }
-      process.stdout.write(C.cyan(delta));
-    },
-    onThinking: (delta: string): void => {
-      if (showThinking) process.stdout.write(C.dim(delta));
-    },
-    onTool: (name: string, args: unknown): void => {
-      if (!showTools) return; // display filter only — the agent still runs the tool
-      const summary = summarizeToolArgs(args);
-      process.stdout.write(
-        "\n" + C.yellow(`⚙ ${name}`) + (summary !== "" ? C.dim(`  ${summary}`) : "") + "\n",
-      );
-    },
-    onTurnEnd: (_usage: unknown): void => {
-      // Blank line below the agent block → clear gap before the next prompt.
-      process.stdout.write("\n\n");
-      busy = false;
-      streamedThisTurn = false;
-      rl.prompt();
-    },
-    onError: (code: string, message: string): void => {
-      process.stdout.write(C.red(`\n[${code}] ${message}\n`));
-      busy = false;
-      streamedThisTurn = false;
-      rl.prompt();
-    },
-    onClose: (): void => {
-      /* connection replaced or shutting down */
-    },
-  });
+    });
 
-  let conn = openConn(wsBase, token, undefined, makeHandlers());
+    await client.connect(sessionId !== undefined ? { sessionId } : {});
+  };
 
-  const reconnect = (sessionId?: string): void => {
-    conn.close();
+  const reconnect = async (sessionId?: string): Promise<void> => {
+    client.close();
     busy = false;
     streamedThisTurn = false;
     ready = false;
-    conn = openConn(wsBase, token, sessionId, makeHandlers());
+    client = createClient({ baseUrl, token });
+    await connectSession(sessionId);
   };
 
   const shutdown = (): void => {
-    conn.close();
+    if (closed) return;
+    closed = true;
+    client.close();
     server?.stop();
     rl.close();
     process.stdout.write(C.dim("\nbye\n"));
@@ -350,7 +284,7 @@ export const runChat = async (opts: ChatOptions): Promise<void> => {
     }, 50);
     if (busy) {
       // Agent is replying → abort the turn, stay in the conversation.
-      conn.abort();
+      client.abort();
       process.stdout.write(C.dim("\n(interrupted)\n"));
       busy = false;
       streamedThisTurn = false;
@@ -362,13 +296,9 @@ export const runChat = async (opts: ChatOptions): Promise<void> => {
 
   // Ctrl-C handling. readline emits its OWN 'SIGINT' event when it owns a TTY,
   // and — crucially — having a listener SUPPRESSES Node's default terminate. So
-  // rl.on('SIGINT') is the supported, reliable hook. We deliberately do NOT add
-  // a process.on('SIGINT') too: a second listener races readline's and can let
-  // the process exit. For non-TTY input (piped/tests) readline doesn't emit
-  // SIGINT, so fall back to the process signal there.
-  // NOTE: Ctrl-C mid-response is known to still exit under `npx tsx` in some
-  // terminals (tracked as a follow-up). Both hooks are wired; the guard
-  // collapses them. Intended behavior: abort the turn while busy, exit when idle.
+  // rl.on('SIGINT') is the supported, reliable hook. We also wire the process
+  // signal so piped/non-TTY input (tests) still aborts; the guard collapses
+  // them into a single action.
   rl.on("SIGINT", onSigint);
   process.on("SIGINT", onSigint);
 
@@ -402,10 +332,9 @@ export const runChat = async (opts: ChatOptions): Promise<void> => {
           break;
         case "thinking": {
           // Set the model's reasoning level (sent to the server next turn).
-          const levels = ["off", "minimal", "low", "medium", "high", "xhigh"];
           if (arg === "") process.stdout.write(C.dim(`thinking level is ${thinking}\n`));
-          else if (!levels.includes(arg))
-            process.stdout.write(C.red(`thinking must be one of: ${levels.join(", ")}\n`));
+          else if (!isThinkingLevel(arg))
+            process.stdout.write(C.red(`thinking must be one of: ${THINKING_LEVELS.join(", ")}\n`));
           else {
             thinking = arg;
             process.stdout.write(C.dim(`thinking level → ${thinking}\n`));
@@ -429,24 +358,28 @@ export const runChat = async (opts: ChatOptions): Promise<void> => {
           break;
         }
         case "new":
-          reconnect(undefined);
+          void reconnect(undefined).catch((e: unknown) =>
+            process.stdout.write(C.red(`reconnect failed: ${String(e)}\n`)),
+          );
           process.stdout.write(C.dim("new session\n"));
           break;
         case "resume":
           if (arg === "") process.stdout.write(C.red("usage: /resume <session_id>\n"));
           else {
-            reconnect(arg);
+            void reconnect(arg).catch((e: unknown) =>
+              process.stdout.write(C.red(`resume failed: ${String(e)}\n`)),
+            );
             process.stdout.write(C.dim(`resuming ${arg}\n`));
           }
           break;
         case "sessions":
-          void rest
-            .listSessions()
+          void client
+            .listSessions(20)
             .then((r) => {
               if (r.sessions.length === 0) process.stdout.write(C.dim("no sessions yet\n"));
               for (const s of r.sessions) {
                 process.stdout.write(
-                  `  ${C.cyan(s.id)} ${C.dim(`(${s.messageCount ?? 0} msgs)`)} ${s.title ?? ""}\n`,
+                  `  ${C.cyan(s.id)} ${C.dim(`(${s.messageCount} msgs)`)} ${s.title}\n`,
                 );
               }
               rl.prompt();
@@ -463,12 +396,12 @@ export const runChat = async (opts: ChatOptions): Promise<void> => {
     if (busy) {
       // Agent is still replying — queue this as a follow-up in the SAME session
       // (delivered after the current turn finishes), instead of rejecting it.
-      conn.followUp(input);
+      client.followUp(input);
       process.stdout.write(C.dim("(queued as follow-up — will run after this turn)\n"));
       return;
     }
     if (!ready) {
-      // WS still connecting — queue the prompt; onReady flushes it.
+      // Session still connecting — queue the prompt; session_ready flushes it.
       pending = input;
       process.stdout.write(C.dim("(connecting…)\n"));
       return;
@@ -477,4 +410,32 @@ export const runChat = async (opts: ChatOptions): Promise<void> => {
   });
 
   rl.on("close", () => shutdown());
+
+  // Open the session AFTER the line/close handlers are wired so that, with
+  // piped input, an EOF-driven shutdown is observed before a late session_ready
+  // frame tries to prompt a closed readline.
+  await connectSession();
 };
+
+const parseArgs = (argv: readonly string[]): ChatOptions => {
+  const opts: ChatOptions = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--connect") opts.connect = argv[++i];
+    else if (a === "--token") opts.token = argv[++i];
+    else if (a === "--thinking") opts.thinking = argv[++i];
+    else if (a === "--no-tools") opts.showTools = false;
+  }
+  return opts;
+};
+
+const isMain =
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  runChat(parseArgs(process.argv.slice(2))).catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}
