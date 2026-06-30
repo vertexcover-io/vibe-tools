@@ -7,7 +7,8 @@
 // constructing a path by hand.
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { Config } from "./config.ts";
-import type { RestAdapter, SessionMeta } from "./rest-server.ts";
+import type { SessionMeta } from "@agentwire/protocol";
+import type { RestAdapter } from "./rest-server.ts";
 import { toServerFrame, createSession as piCreateSession } from "./pi-adapter.ts";
 
 export interface SessionInfoLike {

@@ -2,11 +2,18 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { createRestServer, type RestAdapter, type RestDeps } from "./rest-server.ts";
-import { loadConfig } from "./config.ts";
+import { DEFAULT_PI_AGENT_DIR, type Config } from "./config.ts";
 
 const TOKEN = "good-token";
 
-const cfg = loadConfig({ SERVER_BEARER_TOKENS: TOKEN });
+const cfg: Config = {
+  configDir: DEFAULT_PI_AGENT_DIR,
+  bearerTokens: [TOKEN],
+  workingDir: "/tmp/agentwire-test",
+  idleMs: 300000,
+  maxHot: 50,
+  port: 8787,
+};
 
 interface MockState {
   completeError: boolean;

@@ -5,11 +5,18 @@ import { createServer } from "node:http";
 import { WebSocket } from "ws";
 import { attachWsServer, type WsDeps, type PiSessionLike } from "./ws-server.ts";
 import { SessionRegistry } from "./registry.ts";
-import { loadConfig } from "./config.ts";
+import { DEFAULT_PI_AGENT_DIR, type Config } from "./config.ts";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 
 const TOKEN = "good-token";
-const cfg = loadConfig({ SERVER_BEARER_TOKENS: TOKEN, MAX_HOT: "5" });
+const cfg: Config = {
+  configDir: DEFAULT_PI_AGENT_DIR,
+  bearerTokens: [TOKEN],
+  workingDir: "/tmp/agentwire-test",
+  idleMs: 300000,
+  maxHot: 5,
+  port: 8787,
+};
 
 // ----- Mock pi session with a controllable streaming turn -----
 interface ScriptedSession extends Omit<PiSessionLike, "isStreaming"> {

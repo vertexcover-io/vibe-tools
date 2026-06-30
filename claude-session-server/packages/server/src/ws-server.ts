@@ -13,7 +13,7 @@ import {
   type InboundFrame,
   type ServerOutboundFrame,
   type ThinkingLevel,
-} from "./frames.ts";
+} from "@agentwire/protocol";
 
 export interface PiSessionLike {
   readonly sessionId: string;

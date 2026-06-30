@@ -1,9 +1,6 @@
 // AI-generated. See PROMPT.md for the prompts and model used.
-import { existsSync, mkdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync } from "node:fs";
 import type { Config } from "./config.ts";
-import { PKG_DIR } from "./config.ts";
-import { verifyConfigDir } from "./init.ts";
 import { SessionRegistry } from "./registry.ts";
 import { createRestServer, type RestAdapter } from "./rest-server.ts";
 import { attachWsServer, type PiSessionLike } from "./ws-server.ts";
@@ -18,11 +15,6 @@ import {
 } from "./pi-rest-adapter.ts";
 
 const REAP_TICK_MS = 30000;
-
-// CORE-tier runs don't have the tool packages installed; only verify the
-// config dir when a real settings.json is present and declares packages.
-const shouldVerifyConfigDir = (): boolean =>
-  existsSync(resolve(PKG_DIR, "settings.json"));
 
 export interface ServerDeps {
   readonly restAdapter: RestAdapter;
@@ -56,19 +48,6 @@ export const buildServerDeps = (cfg: Config, lister?: SessionLister): ServerDeps
 };
 
 export const startServer = async (cfg: Config): Promise<void> => {
-  if (shouldVerifyConfigDir()) {
-    try {
-      verifyConfigDir(cfg);
-    } catch {
-      // Tool-layer extensions (Linear/Gmail/browser/Notion) are not installed in
-      // this config dir. The CORE server (sessions + subscription auth) runs fine
-      // without them; run `init` to provision the tool layer.
-      console.warn(
-        "[startServer] tool-layer extensions not provisioned — core server only. Run `init` to add Linear/Gmail/browser/Notion.",
-      );
-    }
-  }
-
   const registry = new SessionRegistry({ maxHot: cfg.maxHot, idleMs: cfg.idleMs });
   const deps = buildServerDeps(cfg);
 

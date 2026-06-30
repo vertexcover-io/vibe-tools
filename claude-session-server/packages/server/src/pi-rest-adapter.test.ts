@@ -1,12 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { loadConfig } from "./config.ts";
+import { DEFAULT_PI_AGENT_DIR, type Config } from "./config.ts";
 import {
   sessionFileFor,
   buildPiRestAdapter,
   type SessionInfoLike,
 } from "./pi-rest-adapter.ts";
 
-const cfg = loadConfig({ PI_WORKING_DIR: "/work" });
+const cfg: Config = {
+  configDir: DEFAULT_PI_AGENT_DIR,
+  bearerTokens: [],
+  workingDir: "/work",
+  idleMs: 300000,
+  maxHot: 50,
+  port: 8787,
+};
 
 const infos: SessionInfoLike[] = [
   {
