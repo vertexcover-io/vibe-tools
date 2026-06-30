@@ -114,6 +114,10 @@ export class SessionRegistry {
     this.entries.delete(id);
   }
 
+  disposeAll(): void {
+    for (const id of [...this.entries.keys()]) this.dispose(id);
+  }
+
   reapIdle(now: number): string[] {
     const disposed: string[] = [];
     for (const entry of this.entries.values()) {

@@ -9,7 +9,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "init": "tsx src/bin.ts init",
     "serve": "tsx src/bin.ts serve"
   },

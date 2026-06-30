@@ -197,14 +197,18 @@ const replayBuffer = (deps: WsDeps, id: string, ws: WebSocket): void => {
   }
 };
 
-const reattach = (deps: WsDeps, session: PiSessionLike, ws: WebSocket): void => {
-  const entry = deps.registry.get(session.sessionId)!;
+// Reattach to a still-hot entry. The entry already owns a live pi session with
+// an active subscriber feeding its buffer/socket, so we rebind the new socket
+// to THAT session and route prompts to it — a freshly reopened session object
+// (from openSession) is redundant here and is disposed by the caller.
+const reattach = (deps: WsDeps, ws: WebSocket, sessionId: string): void => {
+  const entry = deps.registry.get(sessionId)!;
   const stale = entry.ws;
-  deps.registry.attach(session.sessionId, ws);
+  deps.registry.attach(sessionId, ws);
   if (stale !== null && stale !== ws) (stale as WebSocket).terminate();
-  attachWsToEntry(deps, session, ws);
-  send(ws, { type: "session_ready", session_id: session.sessionId });
-  replayBuffer(deps, session.sessionId, ws);
+  attachWsToEntry(deps, entry.session as PiSessionLike, ws);
+  send(ws, { type: "session_ready", session_id: sessionId });
+  replayBuffer(deps, sessionId, ws);
 };
 
 const onConnection = async (
@@ -235,9 +239,13 @@ const onConnection = async (
         message: `session ${session.sessionId} already attached`,
       });
       ws.close();
+      // A freshly opened session object is redundant when the entry is hot.
+      if (existing.session !== (session as unknown)) session.dispose();
       return;
     }
-    reattach(deps, session, ws);
+    // Reuse the entry's live session + subscriber; drop the redundant reopen.
+    if (existing.session !== (session as unknown)) session.dispose();
+    reattach(deps, ws, session.sessionId);
     return;
   }
 
