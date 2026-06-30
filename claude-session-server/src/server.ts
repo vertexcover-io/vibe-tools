@@ -53,8 +53,13 @@ export const startServer = async (cfg: Config): Promise<void> => {
   if (shouldVerifyConfigDir()) {
     try {
       verifyConfigDir(cfg);
-    } catch (error) {
-      console.warn(`[startServer] config dir not provisioned: ${String(error)}`);
+    } catch {
+      // Tool-layer extensions (Linear/Gmail/browser/Notion) are not installed in
+      // this config dir. The CORE server (sessions + subscription auth) runs fine
+      // without them; run `init` to provision the tool layer.
+      console.warn(
+        "[startServer] tool-layer extensions not provisioned — core server only. Run `init` to add Linear/Gmail/browser/Notion.",
+      );
     }
   }
 

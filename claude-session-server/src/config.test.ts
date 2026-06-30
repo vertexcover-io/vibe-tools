@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { resolve } from "node:path";
-import { loadConfig, PKG_DIR } from "./config.ts";
+import { loadConfig, DEFAULT_PI_AGENT_DIR, PKG_DIR } from "./config.ts";
 
 describe("loadConfig", () => {
-  it("test_REQ_027_config_dir_resolution: defaults config dir, env override wins", () => {
+  it("test_REQ_027_config_dir_resolution: defaults to the pi agent dir (where auth lives), env override wins", () => {
     const def = loadConfig({});
-    expect(def.configDir).toBe(resolve(PKG_DIR, ".pi-config"));
+    expect(def.configDir).toBe(DEFAULT_PI_AGENT_DIR);
 
     const overridden = loadConfig({ CLAUDE_CONFIG_DIR: "/custom/pi-config" });
     expect(overridden.configDir).toBe(resolve("/custom/pi-config"));
