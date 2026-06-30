@@ -1,5 +1,7 @@
 .pi-config/
 .sessions/
+apps/server/.pi-config/
+apps/server/.sessions/
 node_modules/
 dist/
 .harness/

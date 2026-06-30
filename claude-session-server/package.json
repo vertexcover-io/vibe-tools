@@ -1,25 +1,21 @@
 {
-  "name": "claude-session-server",
+  "name": "agentwire",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "WS + REST server exposing pi AgentSessions backed by the host Claude subscription",
-  "bin": {
-    "claude-session-server": "src/bin.ts"
-  },
+  "description": "Monorepo: WS/REST server + wire protocol + browser client SDK exposing pi AgentSessions backed by the host Claude subscription",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit",
+    "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
-    "init": "tsx src/bin.ts init",
-    "serve": "tsx src/bin.ts serve"
-  },
-  "dependencies": {
-    "@earendil-works/pi-coding-agent": "0.79.9",
-    "commander": "^12.1.0",
-    "ws": "^8.18.0",
-    "zod": "^3.23.8"
+    "serve": "tsx apps/server/src/bin.ts serve",
+    "init": "tsx apps/server/src/bin.ts init",
+    "chat": "tsx apps/chat/src/chat.ts",
+    "web": "tsx apps/web/src/serve.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
