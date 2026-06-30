@@ -1,3 +1,10 @@
+// AI-generated. See PROMPT.md for the prompts and model used.
+//
+// Lower-level server-direct e2e: boots the real http + ws server from
+// @agentwire/server and asserts wiring (REST health/auth, WS upgrade auth, real
+// pi-backed adapter, on-disk session resolution). Raw ws is fine here — this is
+// the server-direct counterpart to the SDK-driven live.e2e suite. Runs only
+// under `npm run test:e2e`.
 import { describe, it, expect } from "vitest";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -5,9 +12,12 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
-import { startServer, buildServerDeps } from "./server.ts";
-import { loadConfig } from "./config.ts";
-import type { SessionInfoLike } from "./pi-rest-adapter.ts";
+import {
+  startServer,
+  buildServerDeps,
+  type SessionInfoLike,
+} from "@agentwire/server";
+import { buildConfig } from "./live-harness.ts";
 
 const TOKEN = "e2e-token";
 
@@ -23,7 +33,7 @@ const freePort = async (): Promise<number> => {
 describe("e2e: real http + ws server boots via startServer", () => {
   it("test_e2e_startServer_boots_http_ws: REST health + WS auth wired end to end", async () => {
     const port = await freePort();
-    const cfg = loadConfig({
+    const cfg = buildConfig({
       SERVER_BEARER_TOKENS: TOKEN,
       PORT: String(port),
       MAX_HOT: "5",
@@ -62,7 +72,7 @@ describe("e2e: real http + ws server boots via startServer", () => {
     const tmpRoot = mkdtempSync(join(tmpdir(), "css-server-e2e-"));
     const workDir = join(tmpRoot, "sessions-not-yet-created");
     expect(existsSync(workDir)).toBe(false);
-    const cfg = loadConfig({ SERVER_BEARER_TOKENS: TOKEN, PI_WORKING_DIR: workDir });
+    const cfg = buildConfig({ SERVER_BEARER_TOKENS: TOKEN, PI_WORKING_DIR: workDir });
     const info: SessionInfoLike = {
       id: "abc",
       path: "/home/.pi/agent/sessions/enc/123_abc.jsonl",
