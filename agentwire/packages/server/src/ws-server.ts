@@ -306,12 +306,15 @@ export const attachWsServer = (httpServer: Server, deps: WsDeps): WebSocketServe
       socket.destroy();
       return;
     }
-    if (!isAuthorized(tokenFromRequest(url, req), deps.cfg)) {
-      socket.write(`HTTP/1.1 ${CLOSE_AUTH} Unauthorized\r\n\r\n`);
-      socket.destroy();
-      return;
-    }
+    const authorized = isAuthorized(tokenFromRequest(url, req), deps.cfg);
     wss.handleUpgrade(req, socket, head, (ws) => {
+      // Browsers never see a rejected HTTP upgrade (no status, close code forced
+      // to 1006). To let a browser client learn *why*, complete the upgrade and
+      // close with an application close code + reason it can read in `onclose`.
+      if (!authorized) {
+        ws.close(CLOSE_AUTH, "unauthorized");
+        return;
+      }
       const hb = ws as HeartbeatSocket;
       hb.isAlive = true;
       ws.on("pong", () => {

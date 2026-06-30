@@ -22,8 +22,8 @@ class FakeSocket {
   fail(): void {
     this.onerror?.({});
   }
-  serverClose(code: number): void {
-    this.onclose?.({ code });
+  serverClose(code: number, reason?: string): void {
+    this.onclose?.({ code, reason });
   }
 }
 
@@ -80,29 +80,37 @@ describe("createClient ws", () => {
     );
   });
 
-  it("connect() rejects naming the token cause when the server closes (auth 4401)", async () => {
+  it("connect() rejects with '401 unauthorized' when the server closes 4401", async () => {
     const { sockets, factory } = makeSocketFactory();
     const client = createClient({ ...opts, webSocketFactory: factory as never });
     const p = client.connect();
     sockets[0]!.serverClose(4401);
-    await expect(p).rejects.toThrow(/bearer token.*SERVER_BEARER_TOKENS/i);
+    await expect(p).rejects.toThrow(/401 unauthorized.*token rejected/i);
   });
 
-  it("connect() rejects with a real Error (not [object Event]) and names likely causes", async () => {
+  it("connect() rejects 'could not reach server' on a 1006/abnormal close", async () => {
+    const { sockets, factory } = makeSocketFactory();
+    const client = createClient({ ...opts, webSocketFactory: factory as never });
+    const p = client.connect();
+    sockets[0]!.serverClose(1006);
+    await expect(p).rejects.toThrow(/could not reach server/i);
+  });
+
+  it("connect() rejects with a real Error (not [object Event]) on socket error", async () => {
     const { sockets, factory } = makeSocketFactory();
     const client = createClient({ ...opts, webSocketFactory: factory as never });
     const p = client.connect();
     sockets[0]!.fail();
-    await expect(p).rejects.toThrow(/could not connect.*token.*not running/is);
+    await expect(p).rejects.toBeInstanceOf(Error);
   });
 
-  it("connect() rejects only once even if error and close both fire", async () => {
+  it("connect() settles only once even if error and close both fire", async () => {
     const { sockets, factory } = makeSocketFactory();
     const client = createClient({ ...opts, webSocketFactory: factory as never });
     const p = client.connect();
     sockets[0]!.fail();
-    sockets[0]!.serverClose(1006); // second signal must be a no-op
-    await expect(p).rejects.toThrow(/could not connect/i);
+    sockets[0]!.serverClose(4401); // second signal must be a no-op
+    await expect(p).rejects.toThrow(/could not reach server/i);
   });
 
   it("a close AFTER session_ready does not reject the resolved connect", async () => {

@@ -53,17 +53,14 @@ describe("e2e: real http + ws server boots via startServer", () => {
     const noAuth = await fetch(`${base}/sessions`);
     expect(noAuth.status).toBe(401);
 
-    // WS upgrade with a bad token is rejected — attachWsServer is wired.
-    const rejected = await new Promise<"opened" | "rejected">((resolve) => {
+    // WS upgrade with a bad token is accepted then closed with code 4401
+    // (so browsers can read the reason) — attachWsServer is wired.
+    const closeCode = await new Promise<number>((resolve) => {
       const ws = new WebSocket(`ws://127.0.0.1:${port}/sessions/ws?token=wrong`);
-      ws.on("open", () => {
-        ws.close();
-        resolve("opened");
-      });
-      ws.on("error", () => resolve("rejected"));
-      ws.on("unexpected-response", () => resolve("rejected"));
+      ws.on("close", (code) => resolve(code));
+      ws.on("error", () => resolve(-1));
     });
-    expect(rejected).toBe("rejected");
+    expect(closeCode).toBe(4401);
   });
 
   it("test_gap1_serve_wires_real_adapter: REST + WS resume resolve sessions via SessionManager.list, not a constructed path", async () => {

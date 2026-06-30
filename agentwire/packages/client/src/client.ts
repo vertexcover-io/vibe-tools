@@ -51,6 +51,14 @@ const wsUrl = (baseUrl: string, token: string, sessionId?: string): string => {
   return `${base}/sessions/ws?${q.toString()}`;
 };
 
+// 4401 is the server's "unauthorized" close code; 1006 is the browser's "closed
+// abnormally" (no server close frame reached us — typically server unreachable).
+const closeReason = (code?: number, reason?: string): string => {
+  if (code === 4401) return "401 unauthorized: bearer token rejected";
+  if (code === 1006 || code === undefined) return "could not reach server";
+  return reason ? `connection closed: ${reason}` : `connection closed (${code})`;
+};
+
 export const createClient = (opts: ClientOptions): AgentClient => {
   const httpBase = opts.baseUrl.replace(/\/$/, "");
   const doFetch = opts.fetchImpl ?? fetch;
@@ -85,38 +93,28 @@ export const createClient = (opts: ClientOptions): AgentClient => {
         const url = wsUrl(opts.baseUrl, opts.token, connectOpts?.sessionId);
         const sock = makeSocket(url);
         socket = sock;
-        let ready = false;
         let settled = false;
-        // The server rejects a bad/absent bearer by destroying the upgrade with a
-        // 4401 status. Browsers do NOT expose that status to script — the failed
-        // handshake surfaces only as a generic `error` (and/or a `close` with code
-        // 1006), with no way to distinguish "wrong token" from "server down". So
-        // the rejection names the two real causes rather than guessing one.
-        const failed = (detail: string): void => {
-          if (ready || settled) return;
+        const settle = (fn: () => void): void => {
+          if (settled) return;
           settled = true;
-          reject(
-            new Error(
-              `could not connect to ${url} (${detail}). ` +
-                `The server refused or dropped the WebSocket upgrade — most likely ` +
-                `the bearer token does not match the server's SERVER_BEARER_TOKENS, ` +
-                `or the agentwire server is not running at that address.`,
-            ),
-          );
+          fn();
         };
         sock.onmessage = (ev): void => {
           const frame = JSON.parse(ev.data) as ServerOutboundFrame;
           if (frame.type === "session_ready") {
             sid = frame.session_id;
-            ready = true;
-            settled = true;
-            resolve();
+            settle(resolve);
           }
           dispatch(frame);
         };
-        sock.onerror = (): void => failed("connection error");
+        // The server closes an unauthorized upgrade with code 4401, which the
+        // browser delivers here (a generic transport failure arrives as 1006).
         sock.onclose = (ev): void =>
-          failed(`closed before session_ready, code ${ev?.code ?? "unknown"}`);
+          settle(() =>
+            reject(new Error(closeReason(ev?.code, ev?.reason))),
+          );
+        sock.onerror = (): void =>
+          settle(() => reject(new Error(closeReason(undefined, undefined))));
       }),
 
     on: (type, handler) => {

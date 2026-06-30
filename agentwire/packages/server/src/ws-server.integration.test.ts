@@ -168,11 +168,19 @@ describe("WS session protocol", () => {
     ws.close();
   });
 
+  // An unauthorized upgrade is accepted then closed with code 4401 (so browsers
+  // can read the reason), so a 4401 close counts as "rejected". A genuinely
+  // accepted connection stays open and emits frames.
   const outcome = (ws: WebSocket): Promise<"opened" | "rejected"> =>
     new Promise((resolve) => {
-      ws.on("open", () => resolve("opened"));
+      let opened = false;
+      ws.on("open", () => {
+        opened = true;
+      });
+      ws.on("message", () => resolve("opened"));
       ws.on("error", () => resolve("rejected"));
       ws.on("unexpected-response", () => resolve("rejected"));
+      ws.on("close", (code) => resolve(code === 4401 || !opened ? "rejected" : "opened"));
     });
 
   it("test_REQ_021_bearer_auth_enforced: missing/bad token rejected, valid accepted", async () => {

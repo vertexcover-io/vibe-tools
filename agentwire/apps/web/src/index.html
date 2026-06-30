@@ -83,7 +83,10 @@
 
     let client = null;
 
-    const setStatus = (text) => { statusEl.textContent = text; };
+    const setStatus = (text, isError) => {
+      statusEl.textContent = text;
+      statusEl.className = isError ? "err" : "";
+    };
 
     const append = (text, cls) => {
       const span = document.createElement("span");
@@ -110,8 +113,7 @@
       });
       c.on("turn_end", () => append("\n— turn end —\n", "meta"));
       c.on("error", (f) => {
-        append("\n[error] " + f.code + ": " + f.message + "\n", "err");
-        setStatus("Error: " + f.message);
+        setStatus("Error — " + f.code + ": " + f.message, true);
       });
     };
 
@@ -123,7 +125,7 @@
       const baseUrl = baseUrlEl.value.trim();
       const token = tokenEl.value.trim();
       if (!token) {
-        setStatus("Enter a bearer token (it must match the server's SERVER_BEARER_TOKENS).");
+        setStatus("Enter a bearer token (it must match the server's SERVER_BEARER_TOKENS).", true);
         connectBtn.disabled = false;
         return;
       }
@@ -135,8 +137,7 @@
         await client.connect();
       } catch (err) {
         const msg = err && err.message ? err.message : String(err);
-        setStatus("Connect failed: " + msg);
-        append("\n[connect failed] " + msg + "\n", "err");
+        setStatus("Connect failed — " + msg, true);
       } finally {
         connectBtn.disabled = false;
       }

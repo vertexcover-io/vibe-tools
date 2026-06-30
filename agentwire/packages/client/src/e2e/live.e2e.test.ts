@@ -376,39 +376,19 @@ describe.skipIf(noClaudeCreds)("live e2e: real pi + Claude subscription (via @ag
   }, 120000);
 
   it("bearer: ws without token closed 4401; complete() without token 401", async () => {
-    // (1) SDK connect() with no token registered on the server's URL: we still
-    //     pass a token through the client, so to exercise the rejection we hit
-    //     the raw ws endpoint directly (close-code 4401 is not observable via
-    //     the SDK's resolve-on-session_ready connect). This is the single
-    //     permitted raw-ws fallback.
-    const wsRejected = await new Promise<number | "opened">((res) => {
+    // (1) An unauthorized upgrade is accepted then closed with code 4401 (so a
+    //     browser can read the reason). The raw ws sees open → close(4401).
+    const wsClose = await new Promise<number>((res) => {
       const ws = new WebSocket(`ws://127.0.0.1:${live.port}/sessions/ws`);
-      ws.on("open", () => {
-        ws.close();
-        res("opened");
-      });
-      ws.on("unexpected-response", (_req, response) => res(response.statusCode ?? -1));
-      ws.on("error", () => res(4401));
+      ws.on("close", (code) => res(code));
+      ws.on("error", () => res(-1));
     });
-    expect(wsRejected).not.toBe("opened");
+    expect(wsClose).toBe(4401);
 
-    // (2) Also assert the SDK connect rejects when the server has the token but
-    //     we supply a bad one (the client's connect should not resolve).
+    // (2) The SDK connect() with a bad token now rejects with the 4401 reason
+    //     (the close code is observable through the SDK — no raw-ws fallback).
     const badClient = createClient({ baseUrl: baseUrl(live.port), token: "wrong-token" });
-    const connectFailed = await new Promise<boolean>((res) => {
-      const timer = setTimeout(() => res(true), 8000);
-      badClient
-        .connect()
-        .then(() => {
-          clearTimeout(timer);
-          res(false);
-        })
-        .catch(() => {
-          clearTimeout(timer);
-          res(true);
-        });
-    });
-    expect(connectFailed).toBe(true);
+    await expect(badClient.connect()).rejects.toThrow(/401 unauthorized/i);
     badClient.close();
 
     // (3) complete() without token → 401 (raw fetch, since the SDK always sends
