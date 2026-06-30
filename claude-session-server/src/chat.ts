@@ -21,13 +21,33 @@ const C = {
   green: (s: string): string => `\x1b[32m${s}\x1b[0m`,
 };
 
-export interface ChatOptions {
+export // One-line summary of a tool call's args for the inline [tool: …] display.
+const summarizeToolArgs = (args: unknown): string => {
+  if (args === null || typeof args !== "object") return "";
+  const a = args as Record<string, unknown>;
+  const pick = (k: string): string | undefined =>
+    typeof a[k] === "string" ? (a[k] as string) : undefined;
+  const val =
+    pick("command") ?? // bash
+    pick("file_path") ?? // read/write/edit
+    pick("path") ??
+    pick("pattern") ?? // grep/find
+    pick("query") ??
+    pick("url");
+  if (val === undefined) return "";
+  const oneLine = val.replace(/\s+/g, " ").trim();
+  return oneLine.length > 100 ? `${oneLine.slice(0, 100)}…` : oneLine;
+};
+
+interface ChatOptions {
   /** Attach to an already-running server instead of auto-starting one. */
   connect?: string;
   /** Bearer token (default: a generated one for the auto-started server). */
   token?: string;
-  /** Initial thinking level. */
+  /** Initial model reasoning level (off|minimal|low|medium|high|xhigh). */
   thinking?: string;
+  /** Show tool-call lines (display only). Default true. */
+  showTools?: boolean;
 }
 
 interface Frame {
@@ -77,9 +97,14 @@ const startBackgroundServer = async (token: string): Promise<ServerHandle> => {
   const here = dirname(fileURLToPath(import.meta.url));
   const binPath = resolve(here, "bin.ts");
   const child: ChildProcess = spawn("npx", ["tsx", binPath, "serve"], {
+    // detached → the server runs in its OWN process group, so a terminal Ctrl-C
+    // (SIGINT to the foreground group) does NOT hit it. The REPL stays in
+    // control of Ctrl-C; we kill the server explicitly on exit (stop()).
+    detached: true,
     env: { ...process.env, PORT: String(port), SERVER_BEARER_TOKENS: token },
     stdio: ["ignore", "ignore", "inherit"], // surface server warnings on stderr
   });
+  child.unref(); // don't keep the REPL alive on the server child
   const httpBase = `http://127.0.0.1:${port}`;
   process.stdout.write(C.dim(`starting server on :${port} …\n`));
   await waitForHealth(httpBase, token, 30000);
@@ -87,7 +112,16 @@ const startBackgroundServer = async (token: string): Promise<ServerHandle> => {
     wsBase: `ws://127.0.0.1:${port}`,
     httpBase,
     token,
-    stop: () => child.kill(),
+    // Kill the server's whole process group (negative pid) since it's detached.
+    stop: () => {
+      if (child.pid !== undefined) {
+        try {
+          process.kill(-child.pid, "SIGTERM");
+        } catch {
+          child.kill();
+        }
+      }
+    },
   };
 };
 
@@ -109,6 +143,7 @@ interface Conn {
   ws: WebSocket;
   sessionId?: string;
   prompt(text: string, thinking: string): void;
+  followUp(text: string): void;
   abort(): void;
   close(): void;
 }
@@ -121,7 +156,7 @@ const openConn = (
     onReady: (id: string) => void;
     onText: (delta: string) => void;
     onThinking: (delta: string) => void;
-    onTool: (name: string) => void;
+    onTool: (name: string, args: unknown) => void;
     onTurnEnd: (usage: unknown) => void;
     onError: (code: string, message: string) => void;
     onClose: () => void;
@@ -146,7 +181,7 @@ const openConn = (
         handlers.onThinking(String(f.delta));
         break;
       case "tool_execution_start":
-        handlers.onTool(String(f.toolName));
+        handlers.onTool(String(f.toolName), f.args);
         break;
       case "turn_end":
         handlers.onTurnEnd(f.usage);
@@ -169,6 +204,9 @@ const openConn = (
     prompt: (text, thinking): void => {
       ws.send(JSON.stringify({ type: "prompt", text, thinking }));
     },
+    followUp: (text): void => {
+      ws.send(JSON.stringify({ type: "follow_up", text }));
+    },
     abort: (): void => {
       ws.send(JSON.stringify({ type: "abort" }));
     },
@@ -183,10 +221,13 @@ ${C.cyan("commands")}
   /new                 start a fresh session
   /resume <id>         resume a session by id
   /sessions            list recent sessions
-  /thinking <level>    set thinking: off|minimal|low|medium|high|xhigh
+  /thinking <level>    model reasoning effort: off|minimal|low|medium|high|xhigh
+  /show-thinking [on|off]  show/hide thinking tokens (display only)
+  /tools [on|off]      show/hide tool-call lines (display only; tools still run)
   /clear               clear the screen
   /help                show this help
   /quit                exit (Ctrl-D also works)
+  ${C.dim("Type while the agent is replying to queue a follow-up in the same session.")}
   ${C.dim("Ctrl-C during a turn interrupts it.")}
 `;
 
@@ -206,14 +247,20 @@ export const runChat = async (opts: ChatOptions): Promise<void> => {
   }
 
   const rest = restClient(httpBase, token);
-  let thinking = opts.thinking ?? "off";
+  // Thinking level always requested at "medium" so the model reasons; the
+  // toggles below only control what is DISPLAYED, never the model's behavior.
+  let thinking = opts.thinking ?? "medium";
+  let showThinking = false; // /thinking on|off — display only
+  let showTools = opts.showTools ?? true; // /bash on|off (tool lines) — display only
   let busy = false;
   let streamedThisTurn = false;
   let ready = false;
   let pending: string | undefined; // a prompt typed before the WS was ready
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const setPrompt = (): void => rl.setPrompt(C.green("you ▸ "));
+  // Human input is green; the prompt arrow is the only chrome. Agent output and
+  // tool lines get their own colors — no "you"/"agent" labels needed.
+  const setPrompt = (): void => rl.setPrompt(C.green("▸ "));
 
   const sendPrompt = (text: string): void => {
     busy = true;
@@ -234,19 +281,26 @@ export const runChat = async (opts: ChatOptions): Promise<void> => {
     },
     onText: (delta: string): void => {
       if (!streamedThisTurn) {
-        process.stdout.write(C.cyan("claude ▸ "));
+        // Blank line above the agent block (Claude-Code-style separation), then
+        // agent text in cyan. No "agent" label — color is the differentiator.
+        process.stdout.write("\n");
         streamedThisTurn = true;
       }
-      process.stdout.write(delta);
+      process.stdout.write(C.cyan(delta));
     },
     onThinking: (delta: string): void => {
-      process.stdout.write(C.dim(delta));
+      if (showThinking) process.stdout.write(C.dim(delta));
     },
-    onTool: (name: string): void => {
-      process.stdout.write(C.yellow(`\n[tool: ${name}]\n`));
+    onTool: (name: string, args: unknown): void => {
+      if (!showTools) return; // display filter only — the agent still runs the tool
+      const summary = summarizeToolArgs(args);
+      process.stdout.write(
+        "\n" + C.yellow(`⚙ ${name}`) + (summary !== "" ? C.dim(`  ${summary}`) : "") + "\n",
+      );
     },
     onTurnEnd: (_usage: unknown): void => {
-      process.stdout.write("\n");
+      // Blank line below the agent block → clear gap before the next prompt.
+      process.stdout.write("\n\n");
       busy = false;
       streamedThisTurn = false;
       rl.prompt();
@@ -280,9 +334,22 @@ export const runChat = async (opts: ChatOptions): Promise<void> => {
     process.exit(0);
   };
 
-  // Ctrl-C: interrupt the current turn if one is running, else exit.
-  rl.on("SIGINT", () => {
+  // Ctrl-C while the agent is replying → abort the turn and return to the human
+  // prompt (the conversation stays alive). When idle → exit.
+  //
+  // Handle SIGINT at the PROCESS level, not readline's: readline's own SIGINT
+  // handling can let the default terminate win (a single Ctrl-C mid-turn would
+  // kill the process). A process-level listener always fires and suppresses the
+  // default, so we fully control the behavior.
+  let sigintGuard = false; // collapse multiple SIGINT sources into one action
+  const onSigint = (): void => {
+    if (sigintGuard) return;
+    sigintGuard = true;
+    setTimeout(() => {
+      sigintGuard = false;
+    }, 50);
     if (busy) {
+      // Agent is replying → abort the turn, stay in the conversation.
       conn.abort();
       process.stdout.write(C.dim("\n(interrupted)\n"));
       busy = false;
@@ -291,9 +358,24 @@ export const runChat = async (opts: ChatOptions): Promise<void> => {
     } else {
       shutdown();
     }
-  });
+  };
 
-  process.stdout.write(C.cyan("Claude Session Server — chat") + C.dim(`  (thinking: ${thinking}) /help for commands\n`));
+  // Ctrl-C handling. readline emits its OWN 'SIGINT' event when it owns a TTY,
+  // and — crucially — having a listener SUPPRESSES Node's default terminate. So
+  // rl.on('SIGINT') is the supported, reliable hook. We deliberately do NOT add
+  // a process.on('SIGINT') too: a second listener races readline's and can let
+  // the process exit. For non-TTY input (piped/tests) readline doesn't emit
+  // SIGINT, so fall back to the process signal there.
+  // NOTE: Ctrl-C mid-response is known to still exit under `npx tsx` in some
+  // terminals (tracked as a follow-up). Both hooks are wired; the guard
+  // collapses them. Intended behavior: abort the turn while busy, exit when idle.
+  rl.on("SIGINT", onSigint);
+  process.on("SIGINT", onSigint);
+
+  process.stdout.write(
+    C.cyan("PI Agent over WebSockets — chat") +
+      C.dim(`  (thinking: ${thinking}, /help for commands)\n`),
+  );
   setPrompt();
   rl.prompt();
 
@@ -318,13 +400,34 @@ export const runChat = async (opts: ChatOptions): Promise<void> => {
         case "clear":
           process.stdout.write("\x1b[2J\x1b[H");
           break;
-        case "thinking":
-          if (arg === "") process.stdout.write(C.dim(`thinking is ${thinking}\n`));
+        case "thinking": {
+          // Set the model's reasoning level (sent to the server next turn).
+          const levels = ["off", "minimal", "low", "medium", "high", "xhigh"];
+          if (arg === "") process.stdout.write(C.dim(`thinking level is ${thinking}\n`));
+          else if (!levels.includes(arg))
+            process.stdout.write(C.red(`thinking must be one of: ${levels.join(", ")}\n`));
           else {
             thinking = arg;
-            process.stdout.write(C.dim(`thinking → ${thinking}\n`));
+            process.stdout.write(C.dim(`thinking level → ${thinking}\n`));
           }
           break;
+        }
+        case "show-thinking": {
+          // Display toggle only — does NOT change the model's reasoning level.
+          if (arg === "on") showThinking = true;
+          else if (arg === "off") showThinking = false;
+          else showThinking = !showThinking;
+          process.stdout.write(C.dim(`show thinking → ${showThinking ? "on" : "off"}\n`));
+          break;
+        }
+        case "tools": {
+          // Display toggle only — the agent still runs tools.
+          if (arg === "on") showTools = true;
+          else if (arg === "off") showTools = false;
+          else showTools = !showTools;
+          process.stdout.write(C.dim(`show tool calls → ${showTools ? "on" : "off"}\n`));
+          break;
+        }
         case "new":
           reconnect(undefined);
           process.stdout.write(C.dim("new session\n"));
@@ -358,8 +461,10 @@ export const runChat = async (opts: ChatOptions): Promise<void> => {
     }
 
     if (busy) {
-      process.stdout.write(C.dim("(a turn is running — Ctrl-C to interrupt)\n"));
-      rl.prompt();
+      // Agent is still replying — queue this as a follow-up in the SAME session
+      // (delivered after the current turn finishes), instead of rejecting it.
+      conn.followUp(input);
+      process.stdout.write(C.dim("(queued as follow-up — will run after this turn)\n"));
       return;
     }
     if (!ready) {

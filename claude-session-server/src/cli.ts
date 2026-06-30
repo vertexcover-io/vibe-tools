@@ -62,10 +62,18 @@ export const buildProgram = (): Command => {
     .description("interactive chat REPL (auto-starts the server unless --connect)")
     .option("--connect <ws-url>", "attach to a running server instead of auto-starting")
     .option("--token <token>", "bearer token (for --connect)")
-    .option("--thinking <level>", "initial thinking level: off|minimal|low|medium|high|xhigh", "off")
-    .action(async (opts: { connect?: string; token?: string; thinking?: string }) => {
-      await runChat(opts);
-    });
+    .option("--thinking <level>", "model reasoning level: off|minimal|low|medium|high|xhigh", "medium")
+    .option("--no-tools", "hide tool-call lines (display only; tools still run)")
+    .action(
+      async (opts: {
+        connect?: string;
+        token?: string;
+        thinking?: string;
+        tools?: boolean;
+      }) => {
+        await runChat({ ...opts, showTools: opts.tools });
+      },
+    );
 
   return program;
 };
