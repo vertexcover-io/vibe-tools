@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<!-- AI-generated. See PROMPT.md for the prompts and model used. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>agentwire web demo</title>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 0; padding: 1.5rem;
+      max-width: 820px; margin-inline: auto;
+      line-height: 1.4;
+    }
+    h1 { font-size: 1.25rem; margin: 0 0 1rem; }
+    .row { display: flex; gap: .5rem; margin-bottom: .5rem; flex-wrap: wrap; }
+    .row > * { flex: 1 1 auto; }
+    label { font-size: .8rem; opacity: .8; display: block; margin-bottom: .15rem; }
+    input, textarea, button {
+      font: inherit; padding: .5rem .6rem; border-radius: 6px;
+      border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+      background: transparent; color: inherit;
+    }
+    button { cursor: pointer; flex: 0 0 auto; }
+    button:disabled { opacity: .5; cursor: default; }
+    textarea { width: 100%; min-height: 4rem; resize: vertical; }
+    #transcript {
+      border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+      border-radius: 8px; padding: .75rem; min-height: 12rem;
+      white-space: pre-wrap; word-break: break-word;
+      font-family: ui-monospace, monospace; font-size: .85rem;
+      overflow-y: auto; max-height: 24rem;
+    }
+    .meta { opacity: .65; }
+    .tool { color: #b58900; }
+    .err { color: #dc322f; }
+    #status { font-size: .8rem; opacity: .8; margin: .5rem 0; }
+  </style>
+</head>
+<body>
+  <h1>agentwire web demo</h1>
+
+  <div class="row">
+    <div style="flex: 2 1 320px;">
+      <label for="baseUrl">Server base URL</label>
+      <input id="baseUrl" value="http://127.0.0.1:8787" />
+    </div>
+    <div style="flex: 2 1 200px;">
+      <label for="token">Bearer token</label>
+      <input id="token" placeholder="devtoken" />
+    </div>
+    <div style="flex: 0 0 auto; align-self: flex-end;">
+      <button id="connectBtn">Connect</button>
+      <button id="newBtn" disabled>New session</button>
+    </div>
+  </div>
+
+  <div id="status">Not connected.</div>
+
+  <div id="transcript"></div>
+
+  <div class="row" style="margin-top: .75rem;">
+    <textarea id="promptBox" placeholder="Type a prompt and press Send…" disabled></textarea>
+  </div>
+  <div class="row">
+    <button id="sendBtn" disabled style="flex: 0 0 auto;">Send</button>
+  </div>
+
+  <script type="module">
+    import { createClient } from "/client.js";
+
+    const $ = (id) => document.getElementById(id);
+    const baseUrlEl = $("baseUrl");
+    const tokenEl = $("token");
+    const connectBtn = $("connectBtn");
+    const newBtn = $("newBtn");
+    const sendBtn = $("sendBtn");
+    const promptBox = $("promptBox");
+    const transcript = $("transcript");
+    const statusEl = $("status");
+
+    let client = null;
+
+    const setStatus = (text) => { statusEl.textContent = text; };
+
+    const append = (text, cls) => {
+      const span = document.createElement("span");
+      if (cls) span.className = cls;
+      span.textContent = text;
+      transcript.appendChild(span);
+      transcript.scrollTop = transcript.scrollHeight;
+    };
+
+    const setLive = (live) => {
+      promptBox.disabled = !live;
+      sendBtn.disabled = !live;
+      newBtn.disabled = !live;
+    };
+
+    const wire = (c) => {
+      c.on("session_ready", (f) => {
+        setStatus("Connected. Session: " + f.session_id);
+        setLive(true);
+      });
+      c.on("text_delta", (f) => append(f.delta));
+      c.on("tool_execution_start", (f) => {
+        append("\n⚙ " + f.toolName + " " + JSON.stringify(f.args) + "\n", "tool");
+      });
+      c.on("turn_end", () => append("\n— turn end —\n", "meta"));
+      c.on("error", (f) => {
+        append("\n[error] " + f.code + ": " + f.message + "\n", "err");
+        setStatus("Error: " + f.message);
+      });
+    };
+
+    const connect = async () => {
+      if (client) {
+        client.close();
+        client = null;
+      }
+      const baseUrl = baseUrlEl.value.trim();
+      const token = tokenEl.value.trim();
+      setStatus("Connecting…");
+      connectBtn.disabled = true;
+      try {
+        client = createClient({ baseUrl, token });
+        wire(client);
+        await client.connect();
+      } catch (err) {
+        setStatus("Connect failed: " + (err && err.message ? err.message : String(err)));
+        append("\n[connect failed] " + String(err) + "\n", "err");
+      } finally {
+        connectBtn.disabled = false;
+      }
+    };
+
+    const send = () => {
+      if (!client) return;
+      const text = promptBox.value.trim();
+      if (!text) return;
+      append("\n> " + text + "\n", "meta");
+      promptBox.value = "";
+      client.prompt(text);
+    };
+
+    connectBtn.addEventListener("click", connect);
+    newBtn.addEventListener("click", () => {
+      transcript.textContent = "";
+      setStatus("Starting new session…");
+      setLive(false);
+      connect();
+    });
+    sendBtn.addEventListener("click", send);
+    promptBox.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); }
+    });
+  </script>
+</body>
+</html>
