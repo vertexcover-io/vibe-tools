@@ -115,7 +115,11 @@ for dirname, commit_date in tools_with_dates:
     print()
 
 ]]]-->
-## 5 tools
+## 6 tools
+
+### [granola-cli](https://github.com/vertexcover-io/vibe-tools/tree/master/granola-cli#readme) (2026-07-04 11:10)
+
+*No description available — auto-summary unavailable.*
 
 ### [video-lens](https://github.com/vertexcover-io/vibe-tools/tree/master/video-lens#readme) (2026-06-24 08:14)
 
