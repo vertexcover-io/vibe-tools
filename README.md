@@ -115,7 +115,11 @@ for dirname, commit_date in tools_with_dates:
     print()
 
 ]]]-->
-## 6 tools
+## 7 tools
+
+### [ccpack](https://github.com/vertexcover-io/vibe-tools/tree/master/ccpack#readme) (2026-08-21 12:17)
+
+*No description available — auto-summary unavailable.*
 
 ### [granola-cli](https://github.com/vertexcover-io/vibe-tools/tree/master/granola-cli#readme) (2026-07-04 11:10)
 
@@ -133,13 +137,13 @@ for dirname, commit_date in tools_with_dates:
 
 *No description available — auto-summary unavailable.*
 
-### [aibash](https://github.com/vertexcover-io/vibe-tools/tree/master/aibash#readme) (2026-05-02 12:10)
-
-Translates an English description into a concrete bash command using the Claude CLI, with the current directory's file listing passed as context so requests like "delete the largest file" resolve to real filenames. Optionally copies the result to the clipboard or executes it after a confirmation prompt.
-
 ### [pin](https://github.com/vertexcover-io/vibe-tools/tree/master/pin#readme) (2026-05-02 12:10)
 
 A SQLite-backed CLI bookmark manager with nested folders, tags, and Claude-powered natural-language add/search — describe a bookmark in English and Claude fetches the page, infers metadata, and files it; search by intent ("that ml paper about attention") and the matched URL goes straight to the clipboard.
+
+### [aibash](https://github.com/vertexcover-io/vibe-tools/tree/master/aibash#readme) (2026-05-02 12:10)
+
+Translates an English description into a concrete bash command using the Claude CLI, with the current directory's file listing passed as context so requests like "delete the largest file" resolve to real filenames. Optionally copies the result to the clipboard or executes it after a confirmation prompt.
 
 <!--[[[end]]]-->
 
