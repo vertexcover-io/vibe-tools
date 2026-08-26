@@ -115,7 +115,11 @@ for dirname, commit_date in tools_with_dates:
     print()
 
 ]]]-->
-## 7 tools
+## 8 tools
+
+### [linkedin-to-notion](https://github.com/vertexcover-io/vibe-tools/tree/master/linkedin-to-notion#readme) (2026-08-26 04:13)
+
+*No description available — auto-summary unavailable.*
 
 ### [ccpack](https://github.com/vertexcover-io/vibe-tools/tree/master/ccpack#readme) (2026-08-21 12:17)
 
