@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<!-- AI-generated. See PROMPT.md for the prompts and model used. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rolodex</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1c1c1a;
+    --muted: #6f6f68;
+    --line: rgba(0, 0, 0, .11);
+    --field: #fafaf9;
+    --field-focus: #ffffff;
+    --accent: #0a66c2;
+    --accent-fg: #ffffff;
+    --skeleton: rgba(0, 0, 0, .07);
+    --ok-bg: rgba(22, 138, 82, .11);   --ok-fg: #10693e;
+    --warn-bg: rgba(190, 130, 12, .13); --warn-fg: #8a5d00;
+    --err-bg: rgba(196, 45, 45, .11);   --err-fg: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a; --fg: #f2f1ee; --muted: #9b9b94;
+      --line: rgba(255, 255, 255, .13); --field: #262624; --field-focus: #2e2e2b;
+      --accent: #4d9df0; --accent-fg: #0d1b2a; --skeleton: rgba(255, 255, 255, .08);
+      --ok-bg: rgba(60, 190, 120, .14);  --ok-fg: #6fe0a4;
+      --warn-bg: rgba(230, 170, 40, .14); --warn-fg: #f0c268;
+      --err-bg: rgba(240, 90, 90, .13);   --err-fg: #ff9b93;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    width: 384px; margin: 0; background: var(--bg); color: var(--fg);
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header {
+    display: flex; align-items: center; gap: 9px;
+    padding: 12px 14px; border-bottom: 1px solid var(--line);
+  }
+  header img { width: 22px; height: 22px; border-radius: 6px; }
+  header .name { font-weight: 650; letter-spacing: -.01em; flex: 1; }
+  .icon-btn {
+    display: grid; place-items: center; width: 28px; height: 28px; padding: 0;
+    border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--field); color: var(--fg); }
+  .icon-btn[aria-pressed="true"] { background: var(--field); color: var(--fg); }
+
+  main { padding: 14px; }
+
+  /* person preview */
+  .person { display: flex; align-items: center; gap: 11px; margin-bottom: 14px; min-height: 44px; }
+  .avatar {
+    width: 44px; height: 44px; flex: none; border-radius: 50%;
+    background: var(--skeleton); object-fit: cover;
+    display: grid; place-items: center; font-weight: 650; font-size: 15px; color: var(--muted);
+  }
+  .person .who { min-width: 0; flex: 1; }
+  .person .who b { display: block; font-size: 14.5px; font-weight: 650; letter-spacing: -.01em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .person .who span { display: block; color: var(--muted); font-size: 12px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .badge {
+    flex: none; font-size: 11px; font-weight: 600; padding: 2px 7px;
+    border-radius: 999px; background: var(--field); color: var(--muted); border: 1px solid var(--line);
+  }
+  .loading .avatar, .loading .who b, .loading .who span { color: transparent; }
+  .loading .who b, .loading .who span {
+    background: var(--skeleton); border-radius: 5px; height: 12px; margin: 3px 0;
+  }
+  .loading .who b { width: 55%; height: 14px; }
+  .loading .who span { width: 80%; }
+
+  /* fields */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 10px; }
+  .f { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .f.wide { grid-column: 1 / -1; }
+  label { font-size: 10.5px; font-weight: 600; letter-spacing: .03em;
+    text-transform: uppercase; color: var(--muted); }
+  input {
+    width: 100%; padding: 7px 9px; font: inherit; color: var(--fg);
+    background: var(--field); border: 1px solid var(--line); border-radius: 7px;
+  }
+  input:focus { outline: none; background: var(--field-focus);
+    border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+  input::placeholder { color: var(--muted); opacity: .65; }
+
+  button.primary {
+    width: 100%; margin-top: 14px; padding: 10px; font: inherit; font-weight: 650;
+    border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-fg); cursor: pointer;
+  }
+  button.primary:hover:not(:disabled) { filter: brightness(1.07); }
+  button.primary:disabled { opacity: .55; cursor: default; }
+
+  button.secondary {
+    width: 100%; margin: 9px 0 2px; padding: 7px; font: inherit; font-size: 12px; font-weight: 600;
+    color: var(--accent); background: transparent; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 7px;
+  }
+  button.secondary:hover:not(:disabled) { background: var(--field); }
+  button.secondary:disabled { opacity: .6; cursor: default; }
+
+  .msg { margin-top: 11px; padding: 8px 10px; border-radius: 7px; font-size: 12px; }
+  .msg.ok   { background: var(--ok-bg);   color: var(--ok-fg); }
+  .msg.warn { background: var(--warn-bg); color: var(--warn-fg); }
+  .msg.err  { background: var(--err-bg);  color: var(--err-fg); }
+  .msg a { color: inherit; font-weight: 600; }
+
+  /* settings */
+  .hint { font-size: 11.5px; color: var(--muted); margin-top: -1px; }
+  .hint a { color: var(--accent); }
+  .map { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .map-row { display: flex; justify-content: space-between; gap: 10px; font-size: 11.5px;
+    padding: 3px 0; border-bottom: 1px dashed var(--line); }
+  .map-row:last-child { border-bottom: 0; }
+  .map-row b { font-weight: 500; color: var(--muted); }
+  .map-row span { text-align: right; font-variant-numeric: tabular-nums; }
+  .map-row.miss span { color: var(--warn-fg); }
+
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+  <header>
+    <img src="icon-48.png" alt="">
+    <span class="name">Rolodex</span>
+    <button id="gear" class="icon-btn" type="button" aria-pressed="false" title="Settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
+  </header>
+
+  <!-- ============ clip view ============ -->
+  <main id="view-clip">
+    <div id="person" class="person loading">
+      <div class="avatar" id="avatar"></div>
+      <div class="who">
+        <b id="p-name">Reading profile</b>
+        <span id="p-sub">one moment</span>
+      </div>
+      <span class="badge" id="p-degree" hidden></span>
+    </div>
+
+    <div id="notice" class="msg" hidden></div>
+    <button id="fetch-exp" class="secondary" type="button" hidden>Fetch title &amp; company</button>
+
+    <div class="grid">
+      <div class="f wide"><label for="f-name">Name</label><input id="f-name" placeholder="Full name"></div>
+      <div class="f wide"><label for="f-url">LinkedIn URL</label><input id="f-url" placeholder="https://www.linkedin.com/in/..."></div>
+      <div class="f wide"><label for="f-headline">Headline title</label><input id="f-headline" placeholder="Their tagline"></div>
+      <div class="f"><label for="f-title">Current title</label><input id="f-title" placeholder="Role"></div>
+      <div class="f"><label for="f-company">Current company</label><input id="f-company" placeholder="Company"></div>
+      <div class="f"><label for="f-location">Location</label><input id="f-location" placeholder="City, Country"></div>
+      <div class="f"><label for="f-connection">Connection</label><input id="f-connection" placeholder="1st / 2nd / 3rd"></div>
+    </div>
+
+    <button id="save" class="primary" type="button">Save to Notion</button>
+    <div id="status" class="msg" hidden></div>
+  </main>
+
+  <!-- ============ settings view ============ -->
+  <main id="view-settings" hidden>
+    <div class="grid">
+      <div class="f wide">
+        <label for="s-token">Notion integration secret</label>
+        <input id="s-token" type="password" placeholder="ntn_..." autocomplete="off">
+        <div class="hint">Create one at <a href="https://www.notion.so/profile/integrations" target="_blank">notion.so/profile/integrations</a>.</div>
+      </div>
+      <div class="f wide">
+        <label for="s-db">Notion database</label>
+        <input id="s-db" placeholder="Paste the database URL" autocomplete="off">
+        <div class="hint">Open the database, <b>&hellip;</b> menu &rarr; Connections &rarr; add your integration. Without that, Notion returns 404.</div>
+      </div>
+    </div>
+    <button id="save-settings" class="primary" type="button">Connect database</button>
+    <div id="settings-status" class="msg" hidden></div>
+    <div id="mapping" class="map" hidden></div>
+  </main>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

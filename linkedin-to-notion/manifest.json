@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Rolodex",
+  "version": "1.1.0",
+  "description": "Clip LinkedIn profiles into a Notion database — from the profile page, or by right-clicking anyone in a list.",
+  "permissions": ["activeTab", "scripting", "storage", "contextMenus", "tabs", "notifications"],
+  "host_permissions": [
+    "https://api.notion.com/*",
+    "https://*.linkedin.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "icons": {
+    "16": "icon-16.png",
+    "32": "icon-32.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Rolodex — save this profile to Notion",
+    "default_icon": {
+      "16": "icon-16.png",
+      "32": "icon-32.png",
+      "48": "icon-48.png",
+      "128": "icon-128.png"
+    }
+  }
+}
