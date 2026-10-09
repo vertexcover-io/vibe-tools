@@ -1,0 +1,18 @@
+{
+  "name": "hiring-triage",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Keyboard-driven triage UI for candidates in a Notion hiring database",
+  "type": "module",
+  "main": "hiring-triage.mjs",
+  "scripts": {
+    "start": "node hiring-triage.mjs",
+    "auth": "node hiring-triage.mjs auth"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@googleapis/gmail": "22.0.1"
+  }
+}

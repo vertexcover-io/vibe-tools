@@ -1,0 +1,21 @@
+# AI-generated.
+# systemd user service for hiring-triage. Install from the repo (no copying):
+#   systemctl --user link "$PWD/hiring-triage.service"
+#   systemctl --user enable --now hiring-triage
+# Assumes the repo lives at ~/Projects/vibe-tools; adjust WorkingDirectory if not.
+
+[Unit]
+Description=Hiring triage UI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=%h/Projects/vibe-tools/hiring-triage
+# systemd's default PATH lacks user-installed tools such as node.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env node hiring-triage.mjs
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
