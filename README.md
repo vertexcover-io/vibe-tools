@@ -115,7 +115,11 @@ for dirname, commit_date in tools_with_dates:
     print()
 
 ]]]-->
-## 8 tools
+## 9 tools
+
+### [hn-hiring-classifier](https://github.com/vertexcover-io/vibe-tools/tree/master/hn-hiring-classifier#readme) (2026-10-09 12:16)
+
+*No description available — auto-summary unavailable.*
 
 ### [linkedin-to-notion](https://github.com/vertexcover-io/vibe-tools/tree/master/linkedin-to-notion#readme) (2026-08-26 04:13)
 
