@@ -115,7 +115,11 @@ for dirname, commit_date in tools_with_dates:
     print()
 
 ]]]-->
-## 9 tools
+## 10 tools
+
+### [hiring-triage](https://github.com/vertexcover-io/vibe-tools/tree/master/hiring-triage#readme) (2026-10-09 13:06)
+
+*No description available — auto-summary unavailable.*
 
 ### [hn-hiring-classifier](https://github.com/vertexcover-io/vibe-tools/tree/master/hn-hiring-classifier#readme) (2026-10-09 12:16)
 
