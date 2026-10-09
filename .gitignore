@@ -45,3 +45,5 @@ out/
 
 # Claude
 .claude/settings.local.json
+.harness
+.worktrees
