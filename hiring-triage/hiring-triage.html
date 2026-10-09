@@ -1,0 +1,1090 @@
+<!doctype html>
+<!-- AI-generated. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Hiring Triage</title>
+<style>
+  :root {
+    --bg: #0a0a0c;
+    --panel: #111114;
+    --panel-2: #17171b;
+    --border: #26262c;
+    --text: #e6e6ea;
+    --muted: #8a8a93;
+    --accent: #3b82f6;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --red: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+  }
+  a { color: inherit; }
+  button { font: inherit; cursor: pointer; }
+  input, textarea, button { color: inherit; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #2c2c33; border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  .app { display: grid; grid-template-columns: 280px 1fr; height: 100vh; }
+
+  /* ----- list ----- */
+  .list {
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    min-height: 0;
+  }
+  .list-header {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--muted);
+    display: flex; align-items: baseline; justify-content: space-between;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .list-header .count { color: var(--text); font-weight: 600; }
+  .view-tabs { display: inline-flex; gap: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 2px; }
+  .view-tab {
+    background: transparent; border: 0; color: var(--muted);
+    padding: 3px 10px; border-radius: 4px; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .view-tab:hover { color: var(--text); }
+  .view-tab.active { background: var(--accent); color: #fff; }
+  .list-search {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .list-search input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+  }
+  .list-search input::placeholder { color: var(--muted); }
+  .list-items { flex: 1; overflow-y: auto; }
+  .list-item {
+    padding: 10px 14px;
+    border-bottom: 1px solid #18181d;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .list-item:hover { background: var(--panel-2); }
+  .list-item.active { background: #1d293b; }
+  .list-item .name { flex: 1; font-weight: 500; }
+  .list-item .meta { font-size: 11px; color: var(--muted); }
+  .list-item .score {
+    min-width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 4px; background: #2a2a32; font-size: 11px; color: var(--muted);
+  }
+  .list-item .score.has { background: var(--accent); color: white; }
+  .list-item.checked { background: #1a2638; }
+  .list-item .check {
+    appearance: none; -webkit-appearance: none;
+    width: 14px; height: 14px; border: 1px solid #3a3a44; border-radius: 3px;
+    background: var(--bg); cursor: pointer; flex: 0 0 auto;
+    display: inline-grid; place-content: center;
+  }
+  .list-item .check:checked { background: var(--accent); border-color: var(--accent); }
+  .list-item .check:checked::after {
+    content: ""; width: 8px; height: 4px;
+    border: solid white; border-width: 0 0 2px 2px; transform: rotate(-45deg);
+    margin-top: -2px;
+  }
+  .list-empty { padding: 24px 14px; color: var(--muted); text-align: center; font-size: 13px; }
+  .bulk-bar {
+    display: none;
+    padding: 8px 10px; border-bottom: 1px solid var(--border);
+    background: #1a2638; gap: 6px; align-items: center; flex-wrap: wrap;
+  }
+  .bulk-bar.open { display: flex; }
+  .bulk-bar .count { font-size: 12px; font-weight: 600; margin-right: auto; }
+  .bulk-btn {
+    padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text); font-size: 12px;
+  }
+  .bulk-btn:hover:not(:disabled) { background: var(--panel-2); }
+  .bulk-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .bulk-btn.accept { border-color: rgba(34,197,94,0.4); color: var(--green); }
+  .bulk-btn.maybe  { border-color: rgba(245,158,11,0.4); color: var(--amber); }
+  .bulk-btn.reject { border-color: rgba(239,68,68,0.4); color: var(--red); }
+  .bulk-btn.del    { border-color: rgba(239,68,68,0.4); color: var(--red); }
+  .bulk-btn.clear  { color: var(--muted); }
+  .del-btn {
+    background: transparent; border: 0; color: var(--muted);
+    font-size: 12px; padding: 0; text-decoration: underline;
+  }
+  .del-btn:hover { color: var(--red); }
+  .bulk-row {
+    display: flex; gap: 8px; padding: 4px 0;
+    border-bottom: 1px solid #18181d; font-size: 12px;
+  }
+  .bulk-row:last-child { border-bottom: 0; }
+  .bulk-row .name { flex: 1; }
+  .bulk-row .email { color: var(--muted); }
+  .bulk-row.warn .email { color: var(--red); }
+  .list-footer {
+    padding: 10px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .list-footer .refresh {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 4px 8px; border-radius: 4px; font-size: 11px;
+  }
+  .list-footer .refresh:hover { color: var(--text); border-color: #3a3a44; }
+
+  /* ----- detail ----- */
+  .detail { display: flex; flex-direction: column; min-height: 0; }
+  .detail-empty {
+    flex: 1; display: flex; align-items: center; justify-content: center; color: var(--muted);
+  }
+  .detail-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: grid; grid-template-columns: 1fr auto; gap: 8px;
+  }
+  .detail-header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  .detail-header .links { display: flex; gap: 6px; flex-wrap: wrap; }
+  .link-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    border: 1px solid var(--border); padding: 4px 8px; border-radius: 999px;
+    font-size: 12px; color: var(--text); text-decoration: none;
+  }
+  .link-pill:hover { background: var(--panel-2); }
+  .link-pill.disabled { opacity: 0.3; cursor: default; }
+  .link-pill .k { font-size: 10px; color: var(--muted); margin-left: 4px; }
+  .detail-sub {
+    grid-column: 1 / -1;
+    display: flex; gap: 14px; color: var(--muted); font-size: 12px;
+    margin-top: 4px;
+  }
+  .detail-sub .badge {
+    background: var(--panel-2); padding: 2px 6px; border-radius: 4px; color: var(--text);
+  }
+  .detail-sub a { color: var(--muted); text-decoration: underline; }
+
+  .detail-body {
+    flex: 1; min-height: 0;
+    display: grid; grid-template-columns: minmax(360px, 460px) 1fr; gap: 0;
+  }
+  .left-col {
+    border-right: 1px solid var(--border);
+    padding: 16px 18px;
+    display: flex; flex-direction: column; gap: 14px;
+    overflow-y: auto;
+  }
+  .field-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--muted); margin-bottom: 6px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .saving { font-size: 10px; color: var(--amber); }
+  .saved { font-size: 10px; color: var(--muted); }
+
+  .score-row { display: flex; gap: 4px; flex-wrap: wrap; }
+  .score-cell {
+    flex: 1; min-width: 30px; height: 36px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 600;
+  }
+  .score-cell:hover { background: var(--panel-2); }
+  .score-cell.active { background: var(--accent); border-color: var(--accent); }
+  .score-clear {
+    height: 36px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); font-size: 12px;
+  }
+
+  textarea.reason {
+    width: 100%; min-height: 110px;
+    background: var(--panel); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 10px;
+    font: inherit; resize: vertical;
+  }
+
+  .email-row { display: flex; gap: 6px; }
+  .email-row input {
+    flex: 1; background: var(--panel); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 8px 10px;
+    font: inherit;
+  }
+  .email-row input.missing { border-color: var(--red); }
+  .email-row button {
+    border: 1px solid var(--border); background: transparent; color: var(--muted);
+    border-radius: 6px; padding: 6px 10px;
+  }
+  .email-row button:hover { color: var(--text); }
+
+  .actions { display: flex; gap: 8px; margin-top: auto; padding-top: 12px; }
+  .btn {
+    flex: 1; padding: 12px;
+    border: 1px solid var(--border); background: var(--panel);
+    color: var(--text); border-radius: 6px;
+    font-size: 14px; font-weight: 600;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn:hover:not(:disabled) { background: var(--panel-2); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn.loading { opacity: 0.7; cursor: wait; pointer-events: none; }
+  .btn.loading .kbd { visibility: hidden; }
+  .btn.loading::after {
+    content: ""; width: 12px; height: 12px;
+    border: 2px solid currentColor; border-right-color: transparent;
+    border-radius: 50%; animation: btn-spin 0.7s linear infinite;
+    display: inline-block;
+  }
+  @keyframes btn-spin { to { transform: rotate(360deg); } }
+  .btn.accept { border-color: rgba(34,197,94,0.4); color: var(--green); }
+  .btn.accept:hover:not(:disabled) { background: rgba(34,197,94,0.1); }
+  .btn.maybe  { border-color: rgba(245,158,11,0.4); color: var(--amber); }
+  .btn.maybe:hover:not(:disabled)  { background: rgba(245,158,11,0.1); }
+  .btn.reject { border-color: rgba(239,68,68,0.4); color: var(--red); }
+  .btn.reject:hover:not(:disabled) { background: rgba(239,68,68,0.1); }
+  .kbd {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+    padding: 1px 6px; border-radius: 4px; font-family: ui-monospace, Menlo, monospace;
+    font-size: 11px; color: var(--muted); min-width: 18px;
+  }
+
+  .right-col { background: #08080a; display: flex; flex-direction: column; }
+  .resume-frame { flex: 1; width: 100%; border: 0; background: #1c1c20; }
+  .no-resume { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+
+  /* ----- toast ----- */
+  #toast {
+    position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px;
+    z-index: 100; max-width: 360px;
+  }
+  .toast {
+    background: var(--panel-2); border: 1px solid var(--border); padding: 10px 14px;
+    border-radius: 6px; font-size: 13px; box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  .toast.success { border-left: 3px solid var(--green); }
+  .toast.error   { border-left: 3px solid var(--red); }
+  .toast.info    { border-left: 3px solid var(--accent); }
+
+  /* ----- dialog ----- */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: none; align-items: center; justify-content: center; z-index: 50;
+  }
+  .overlay.open { display: flex; }
+  .dialog {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; width: 560px; max-width: 92vw; max-height: 80vh;
+    padding: 20px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .dialog h2 { margin: 0; font-size: 16px; }
+  .dialog .preview {
+    background: #08080a; border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px; font-size: 12px; white-space: pre-wrap; overflow-y: auto; max-height: 280px;
+    font-family: ui-monospace, Menlo, monospace; color: #c5c5cc;
+  }
+  .dialog .actions-row {
+    display: flex; gap: 8px; justify-content: flex-end;
+  }
+
+  /* ----- help ----- */
+  .help { font-size: 12px; }
+  .help table { border-collapse: collapse; width: 100%; }
+  .help td { padding: 4px 6px; }
+  .help td:first-child { width: 90px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="list">
+    <div class="list-header">
+      <div class="view-tabs">
+        <button class="view-tab active" data-view="Not started">Not Started</button>
+        <button class="view-tab" data-view="Intro Call">Intro</button>
+        <button class="view-tab" data-view="Hold">Maybe</button>
+      </div>
+      <span class="count" id="count">—</span>
+    </div>
+    <div class="list-search">
+      <input id="search-input" type="search" placeholder="Search by name…   ( / )" autocomplete="off" />
+    </div>
+    <div class="bulk-bar" id="bulk-bar">
+      <span class="count" id="bulk-count">0 selected</span>
+      <button class="bulk-btn accept" id="bulk-accept">Accept</button>
+      <button class="bulk-btn maybe"  id="bulk-maybe">Maybe</button>
+      <button class="bulk-btn reject" id="bulk-reject">Reject…</button>
+      <button class="bulk-btn del"    id="bulk-delete">Delete…</button>
+      <button class="bulk-btn clear"  id="bulk-clear">Clear</button>
+    </div>
+    <div class="list-items" id="list">
+      <div class="list-empty">loading…</div>
+    </div>
+    <div class="list-footer">
+      <span><span class="kbd">?</span> shortcuts</span>
+      <button class="refresh" id="refresh">refresh</button>
+    </div>
+  </aside>
+
+  <main class="detail" id="detail">
+    <div class="detail-empty">No candidate selected.</div>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<div class="overlay" id="reject-overlay">
+  <div class="dialog">
+    <h2>Send rejection email?</h2>
+    <div id="reject-summary" style="font-size:12px;color:var(--muted)"></div>
+    <div class="preview" id="reject-preview">loading…</div>
+    <div class="actions-row">
+      <button class="btn" id="reject-cancel" style="flex:0">Cancel <span class="kbd">N</span></button>
+      <button class="btn reject" id="reject-confirm" style="flex:0">Send <span class="kbd">Y</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="bulk-reject-overlay">
+  <div class="dialog">
+    <h2>Send rejection email to <span id="bulk-reject-count">0</span> candidate(s)?</h2>
+    <div id="bulk-reject-summary" style="font-size:12px;color:var(--muted)"></div>
+    <div class="preview" id="bulk-reject-list">loading…</div>
+    <div class="actions-row">
+      <button class="btn" id="bulk-reject-cancel" style="flex:0">Cancel <span class="kbd">N</span></button>
+      <button class="btn reject" id="bulk-reject-confirm" style="flex:0">Send all <span class="kbd">Y</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="delete-overlay">
+  <div class="dialog">
+    <h2 id="delete-title">Delete candidate?</h2>
+    <div id="delete-summary" style="font-size:12px;color:var(--muted)"></div>
+    <div class="preview" id="delete-list" style="display:none"></div>
+    <div style="font-size:12px;color:var(--muted)">This archives the page in Notion (moves it to trash — restorable from the Notion UI). No email is sent.</div>
+    <div class="actions-row">
+      <button class="btn" id="delete-cancel" style="flex:0">Cancel <span class="kbd">N</span></button>
+      <button class="btn reject" id="delete-confirm" style="flex:0">Delete <span class="kbd">Y</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="help-overlay">
+  <div class="dialog help">
+    <h2>Keyboard shortcuts</h2>
+    <table>
+      <tr><td><span class="kbd">J</span> / <span class="kbd">↓</span></td><td>next candidate</td></tr>
+      <tr><td><span class="kbd">K</span> / <span class="kbd">↑</span></td><td>previous candidate</td></tr>
+      <tr><td><span class="kbd">1</span>–<span class="kbd">9</span>, <span class="kbd">0</span></td><td>set score (0 = 10)</td></tr>
+      <tr><td><span class="kbd">/</span></td><td>focus search</td></tr>
+      <tr><td><span class="kbd">N</span></td><td>focus reason textarea</td></tr>
+      <tr><td><span class="kbd">E</span></td><td>focus email field</td></tr>
+      <tr><td><span class="kbd">A</span></td><td>Accept → Intro Call (bulk if any selected)</td></tr>
+      <tr><td><span class="kbd">M</span></td><td>Maybe → Hold (bulk if any selected)</td></tr>
+      <tr><td><span class="kbd">R</span></td><td>Reject (bulk if any selected, opens confirm)</td></tr>
+      <tr><td>Delete</td><td>archive candidate in Notion — button in header, or bulk via selection (opens confirm)</td></tr>
+      <tr><td><span class="kbd">X</span> / <span class="kbd">Space</span></td><td>toggle selection on focused candidate</td></tr>
+      <tr><td><span class="kbd">Esc</span></td><td>clear bulk selection / blur input / close dialog</td></tr>
+      <tr><td><span class="kbd">G</span></td><td>open GitHub</td></tr>
+      <tr><td><span class="kbd">L</span></td><td>open LinkedIn</td></tr>
+      <tr><td><span class="kbd">P</span></td><td>open Portfolio / Profile URL</td></tr>
+      <tr><td><span class="kbd">?</span></td><td>toggle this help</td></tr>
+    </table>
+    <div class="actions-row">
+      <button class="btn" id="help-close" style="flex:0">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ----- state -----
+const state = {
+  candidates: [],
+  selectedId: null,
+  checked: new Set(),         // ids selected for bulk actions
+  view: "Not started",        // which Status to list: "Not started" | "Intro Call" | "Hold" (Maybe)
+  bulkRejectOpen: false,
+  deleteOpen: false,
+  deleteBulk: false,
+  busy: false,
+  rejectOpen: false,
+  helpOpen: false,
+  reasonTimer: null,
+  emailTimer: null,
+  saving: 0,
+  search: "",
+};
+
+// Filter + sort: scored first (descending), unscored after (oldest first).
+function displayedCandidates() {
+  const q = state.search.trim().toLowerCase();
+  const filtered = q
+    ? state.candidates.filter((c) => c.name.toLowerCase().includes(q))
+    : state.candidates.slice();
+  filtered.sort((a, b) => {
+    const aScored = a.score != null;
+    const bScored = b.score != null;
+    if (aScored && bScored) return b.score - a.score;
+    if (aScored) return -1;
+    if (bScored) return 1;
+    return new Date(a.createdTime) - new Date(b.createdTime);
+  });
+  return filtered;
+}
+
+// ----- helpers -----
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+function toast(msg, kind = "info") {
+  const el = document.createElement("div");
+  el.className = `toast ${kind}`;
+  el.textContent = msg;
+  $("#toast").appendChild(el);
+  setTimeout(() => el.remove(), kind === "error" ? 5000 : 2500);
+}
+
+function timeAgo(iso) {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return `${Math.floor(diff)}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function selected() {
+  return state.candidates.find((c) => c.id === state.selectedId) ?? null;
+}
+
+function setSelected(id) {
+  state.selectedId = id;
+  render();
+}
+
+function moveTo(delta) {
+  const list = displayedCandidates();
+  if (list.length === 0) return;
+  const idx = list.findIndex((c) => c.id === state.selectedId);
+  const next = Math.min(list.length - 1, Math.max(0, (idx === -1 ? 0 : idx) + delta));
+  setSelected(list[next].id);
+}
+
+function removeFromList(id) {
+  const list = displayedCandidates();
+  const idx = list.findIndex((c) => c.id === id);
+  state.candidates = state.candidates.filter((c) => c.id !== id);
+  state.checked.delete(id);
+  const after = displayedCandidates();
+  if (after.length === 0) {
+    state.selectedId = null;
+  } else {
+    state.selectedId = after[Math.min(idx === -1 ? 0 : idx, after.length - 1)].id;
+  }
+  render();
+}
+
+function removeManyFromList(ids) {
+  const removeSet = new Set(ids);
+  const list = displayedCandidates();
+  const firstIdx = list.findIndex((c) => removeSet.has(c.id));
+  state.candidates = state.candidates.filter((c) => !removeSet.has(c.id));
+  for (const id of ids) state.checked.delete(id);
+  const after = displayedCandidates();
+  if (after.length === 0) state.selectedId = null;
+  else if (!after.find((c) => c.id === state.selectedId)) {
+    state.selectedId = after[Math.min(firstIdx === -1 ? 0 : firstIdx, after.length - 1)].id;
+  }
+  render();
+}
+
+function toggleChecked(id) {
+  if (state.checked.has(id)) state.checked.delete(id);
+  else state.checked.add(id);
+  render();
+}
+
+function clearChecked() {
+  if (state.checked.size === 0) return;
+  state.checked.clear();
+  render();
+}
+
+function replaceInList(updated) {
+  state.candidates = state.candidates.map((c) => (c.id === updated.id ? updated : c));
+}
+
+async function api(path, opts = {}) {
+  state.saving++;
+  renderSavingFlag();
+  try {
+    const res = await fetch(path, {
+      method: opts.method ?? "GET",
+      headers: opts.body ? { "Content-Type": "application/json" } : undefined,
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+    return json;
+  } finally {
+    state.saving--;
+    renderSavingFlag();
+  }
+}
+
+function renderSavingFlag() {
+  const flag = $("#saving-flag");
+  if (!flag) return;
+  flag.textContent = state.saving > 0 ? "saving…" : "saved";
+  flag.className = state.saving > 0 ? "saving" : "saved";
+}
+
+// ----- data -----
+async function loadList() {
+  try {
+    const { candidates } = await api(`/api/candidates?status=${encodeURIComponent(state.view)}`);
+    state.candidates = candidates;
+    const displayed = displayedCandidates();
+    if (!state.selectedId || !displayed.find((c) => c.id === state.selectedId)) {
+      state.selectedId = displayed[0]?.id ?? null;
+    }
+    render();
+  } catch (err) {
+    toast(err.message, "error");
+  }
+}
+
+function setView(view) {
+  if (state.view === view) return;
+  state.view = view;
+  state.checked.clear();
+  state.selectedId = null;
+  state.search = "";
+  const searchEl = $("#search-input"); if (searchEl) searchEl.value = "";
+  $$(".view-tab").forEach((t) => t.classList.toggle("active", t.dataset.view === view));
+  loadList();
+}
+
+async function patch(id, body) {
+  const { candidate } = await api(`/api/candidates/${id}`, { method: "PATCH", body });
+  return candidate;
+}
+
+async function setScore(score) {
+  const c = selected();
+  if (!c) return;
+  c.score = score;
+  render();
+  try {
+    const updated = await patch(c.id, { score });
+    replaceInList(updated);
+  } catch (err) {
+    toast(err.message, "error");
+  }
+}
+
+function setReason(reason) {
+  const c = selected();
+  if (!c) return;
+  c.scoreReason = reason;
+  if (state.reasonTimer) clearTimeout(state.reasonTimer);
+  state.reasonTimer = setTimeout(async () => {
+    try {
+      const updated = await patch(c.id, { scoreReason: reason });
+      replaceInList(updated);
+    } catch (err) { toast(err.message, "error"); }
+  }, 600);
+}
+
+function setEmail(email) {
+  const c = selected();
+  if (!c) return;
+  c.email = email;
+  render();
+  if (state.emailTimer) clearTimeout(state.emailTimer);
+  state.emailTimer = setTimeout(async () => {
+    try {
+      const updated = await patch(c.id, { email });
+      replaceInList(updated);
+    } catch (err) { toast(err.message, "error"); }
+  }, 600);
+}
+
+function setBtnLoading(btn, on) {
+  if (!btn) return;
+  btn.classList.toggle("loading", on);
+  btn.disabled = on;
+}
+
+async function withLoading(btnId, fn) {
+  const btn = document.getElementById(btnId);
+  setBtnLoading(btn, true);
+  try { return await fn(); }
+  finally { setBtnLoading(btn, false); }
+}
+
+async function accept() {
+  const c = selected();
+  if (!c || state.busy) return;
+  state.busy = true;
+  await withLoading("btn-accept", async () => {
+    try {
+      await patch(c.id, { status: "Intro Call" });
+      toast(`${c.name} → Intro Call`, "success");
+      removeFromList(c.id);
+    } catch (err) { toast(err.message, "error"); }
+  });
+  state.busy = false;
+}
+
+async function maybe() {
+  const c = selected();
+  if (!c || state.busy) return;
+  state.busy = true;
+  await withLoading("btn-maybe", async () => {
+    try {
+      await patch(c.id, { status: "Hold" });
+      toast(`${c.name} → Hold`, "info");
+      removeFromList(c.id);
+    } catch (err) { toast(err.message, "error"); }
+  });
+  state.busy = false;
+}
+
+async function openReject() {
+  const c = selected();
+  if (!c) return;
+  if (!c.email) {
+    toast("Set an email for this candidate first.", "error");
+    document.getElementById("email-input")?.focus();
+    return;
+  }
+  state.rejectOpen = true;
+  $("#reject-overlay").classList.add("open");
+  $("#reject-summary").textContent = `To: ${c.email}`;
+  $("#reject-preview").textContent = "loading preview…";
+  try {
+    const data = await api(`/api/candidates/${c.id}/preview-reject`);
+    $("#reject-preview").textContent = `Subject: ${data.subject}\n\n${data.body}`;
+  } catch (err) {
+    $("#reject-preview").textContent = `(failed to load preview: ${err.message})`;
+  }
+}
+
+function closeReject() {
+  state.rejectOpen = false;
+  $("#reject-overlay").classList.remove("open");
+}
+
+async function confirmReject() {
+  const c = selected();
+  if (!c || state.busy) return;
+  state.busy = true;
+  await withLoading("reject-confirm", async () => {
+    try {
+      const res = await api(`/api/candidates/${c.id}/reject`, { method: "POST" });
+      toast(`Rejection sent to ${c.email}`, "success");
+      closeReject();
+      removeFromList(c.id);
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  });
+  state.busy = false;
+}
+
+// ----- bulk actions -----
+function checkedCandidates() {
+  return state.candidates.filter((c) => state.checked.has(c.id));
+}
+
+function summarizeBulk(action, results) {
+  const ok = results.filter((r) => r.ok).length;
+  const fail = results.length - ok;
+  const verb = { accept: "moved to Intro Call", maybe: "moved to Hold", reject: "rejected", delete: "deleted" }[action];
+  if (fail === 0) toast(`${ok} ${verb}`, "success");
+  else toast(`${ok} ${verb}, ${fail} failed`, fail === results.length ? "error" : "info");
+  // Surface a couple of error messages so they don't disappear silently.
+  results.filter((r) => !r.ok).slice(0, 3).forEach((r) => {
+    const c = state.candidates.find((x) => x.id === r.id);
+    toast(`${c?.name ?? r.id}: ${r.error}`, "error");
+  });
+}
+
+async function bulkAction(action, btnId) {
+  const items = checkedCandidates();
+  if (items.length === 0 || state.busy) return;
+  state.busy = true;
+  await withLoading(btnId, async () => {
+    try {
+      const { results } = await api("/api/candidates/bulk", {
+        method: "POST",
+        body: { ids: items.map((c) => c.id), action },
+      });
+      const okIds = results.filter((r) => r.ok).map((r) => r.id);
+      removeManyFromList(okIds);
+      summarizeBulk(action, results);
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  });
+  state.busy = false;
+}
+
+function openBulkReject() {
+  const items = checkedCandidates();
+  if (items.length === 0) return;
+  state.bulkRejectOpen = true;
+  $("#bulk-reject-overlay").classList.add("open");
+  $("#bulk-reject-count").textContent = String(items.length);
+  const missing = items.filter((c) => !c.email).length;
+  const alreadySent = items.filter((c) => c.rejectMailSentAt).length;
+  const warn = [];
+  if (missing) warn.push(`${missing} missing email`);
+  if (alreadySent) warn.push(`${alreadySent} already rejected`);
+  $("#bulk-reject-summary").textContent = warn.length
+    ? `Heads up — ${warn.join(", ")}; those will fail.`
+    : "All selected candidates have email and have not been emailed yet.";
+  $("#bulk-reject-list").innerHTML = items.map((c) => {
+    const bad = !c.email || c.rejectMailSentAt;
+    const note = !c.email ? " (no email)" : c.rejectMailSentAt ? " (already sent)" : "";
+    return `<div class="bulk-row ${bad ? "warn" : ""}">
+      <span class="name">${escapeHtml(c.name)}</span>
+      <span class="email">${escapeHtml(c.email ?? "—")}${note}</span>
+    </div>`;
+  }).join("");
+}
+
+function closeBulkReject() {
+  state.bulkRejectOpen = false;
+  $("#bulk-reject-overlay").classList.remove("open");
+}
+
+async function confirmBulkReject() {
+  closeBulkReject();
+  await bulkAction("reject", "bulk-reject");
+}
+
+// ----- delete (archive) -----
+function openDelete() {
+  const c = selected();
+  if (!c) return;
+  state.deleteOpen = true;
+  state.deleteBulk = false;
+  $("#delete-title").textContent = "Delete this candidate?";
+  $("#delete-summary").textContent = c.name;
+  $("#delete-list").style.display = "none";
+  $("#delete-overlay").classList.add("open");
+}
+
+function openBulkDelete() {
+  const items = checkedCandidates();
+  if (items.length === 0) return;
+  state.deleteOpen = true;
+  state.deleteBulk = true;
+  $("#delete-title").textContent = `Delete ${items.length} candidate(s)?`;
+  $("#delete-summary").textContent = "";
+  const list = $("#delete-list");
+  list.style.display = "";
+  list.innerHTML = items.map((c) =>
+    `<div class="bulk-row"><span class="name">${escapeHtml(c.name)}</span><span class="email">${escapeHtml(c.email ?? "—")}</span></div>`
+  ).join("");
+  $("#delete-overlay").classList.add("open");
+}
+
+function closeDelete() {
+  state.deleteOpen = false;
+  $("#delete-overlay").classList.remove("open");
+}
+
+async function confirmDelete() {
+  if (state.busy) return;
+  if (state.deleteBulk) {
+    closeDelete();
+    await bulkAction("delete", "bulk-delete");
+    return;
+  }
+  const c = selected();
+  if (!c) return;
+  state.busy = true;
+  await withLoading("delete-confirm", async () => {
+    try {
+      await api(`/api/candidates/${c.id}`, { method: "DELETE" });
+      toast(`${c.name} deleted`, "success");
+      closeDelete();
+      removeFromList(c.id);
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  });
+  state.busy = false;
+}
+
+function openHelp() { state.helpOpen = true; $("#help-overlay").classList.add("open"); }
+function closeHelp() { state.helpOpen = false; $("#help-overlay").classList.remove("open"); }
+
+// ----- render -----
+function render() {
+  // count (total / shown)
+  const displayed = displayedCandidates();
+  const total = state.candidates.length;
+  $("#count").textContent = displayed.length === total ? String(total) : `${displayed.length}/${total}`;
+
+  // sync search input value without stealing focus / cursor
+  const searchEl = $("#search-input");
+  if (searchEl && document.activeElement !== searchEl) searchEl.value = state.search;
+
+  // bulk-bar
+  const bar = $("#bulk-bar");
+  if (state.checked.size > 0) {
+    bar.classList.add("open");
+    $("#bulk-count").textContent = `${state.checked.size} selected`;
+  } else {
+    bar.classList.remove("open");
+  }
+
+  // list
+  const list = $("#list");
+  if (displayed.length === 0) {
+    list.innerHTML = `<div class="list-empty">${state.search ? "no matches" : (state.view === "Hold" ? "No candidates on hold" : state.view === "Intro Call" ? "No candidates in intro" : "Inbox zero ✨")}</div>`;
+  } else {
+    list.innerHTML = displayed.map((c) => {
+      const isChecked = state.checked.has(c.id);
+      return `
+      <div class="list-item ${c.id === state.selectedId ? "active" : ""} ${isChecked ? "checked" : ""}" data-id="${c.id}">
+        <input type="checkbox" class="check" data-id="${c.id}" ${isChecked ? "checked" : ""} />
+        <span class="score ${c.score != null ? "has" : ""}">${c.score ?? "—"}</span>
+        <div style="flex:1;min-width:0">
+          <div class="name" style="text-overflow:ellipsis;overflow:hidden;white-space:nowrap">${escapeHtml(c.name)}</div>
+          <div class="meta">${c.source ?? "—"} · ${timeAgo(c.createdTime)}</div>
+        </div>
+      </div>
+    `;
+    }).join("");
+    list.querySelectorAll(".list-item").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        if (e.target.classList.contains("check")) return;  // checkbox handled separately
+        setSelected(el.dataset.id);
+      });
+    });
+    list.querySelectorAll(".check").forEach((el) => {
+      el.addEventListener("click", (e) => e.stopPropagation());
+      el.addEventListener("change", (e) => toggleChecked(e.target.dataset.id));
+    });
+    // ensure selected is visible
+    const sel = list.querySelector(".list-item.active");
+    if (sel) sel.scrollIntoView({ block: "nearest" });
+  }
+
+  // detail
+  const c = selected();
+  const detail = $("#detail");
+  if (!c) {
+    detail.innerHTML = '<div class="detail-empty">No candidate selected.</div>';
+    return;
+  }
+
+  const link = (url, label, key) =>
+    url ? `<a class="link-pill" href="${url}" target="_blank" rel="noopener">${label}<span class="k">${key}</span></a>`
+        : `<span class="link-pill disabled">${label}<span class="k">${key}</span></span>`;
+
+  detail.innerHTML = `
+    <div class="detail-header">
+      <div>
+        <h1>${escapeHtml(c.name)}</h1>
+        <div class="detail-sub">
+          ${c.source ? `<span class="badge">${c.source}</span>` : ""}
+          <span>Added ${timeAgo(c.createdTime)}</span>
+          <a href="${c.notionUrl}" target="_blank" rel="noopener">Open in Notion ↗</a>
+          <span id="saving-flag" class="saved">saved</span>
+          <button id="btn-delete" class="del-btn" title="Archive this candidate in Notion">Delete</button>
+        </div>
+      </div>
+      <div class="links">
+        ${link(c.github, "GitHub", "G")}
+        ${link(c.linkedin, "LinkedIn", "L")}
+        ${link(c.profileUrl, "Portfolio", "P")}
+      </div>
+    </div>
+    <div class="detail-body">
+      <div class="left-col">
+        <div>
+          <div class="field-label">Email <span style="color:var(--muted);text-transform:none;letter-spacing:0">— required for reject</span></div>
+          <div class="email-row">
+            <input id="email-input" type="email" value="${escapeAttr(c.email ?? "")}" placeholder="candidate@email.com"
+                   class="${c.email ? "" : "missing"}" />
+          </div>
+        </div>
+
+        <div>
+          <div class="field-label">Score <span class="kbd">1</span>–<span class="kbd">9</span> <span class="kbd">0</span>=10</div>
+          <div class="score-row">
+            ${[1,2,3,4,5,6,7,8,9,10].map((n) =>
+              `<button class="score-cell ${c.score === n ? "active" : ""}" data-score="${n}">${n}</button>`
+            ).join("")}
+            <button class="score-clear" data-score="">clear</button>
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;flex-direction:column">
+          <div class="field-label">Reason <span class="kbd">N</span></div>
+          <textarea id="reason-input" class="reason" placeholder="Why this score? (notes auto-save)">${escapeHtml(c.scoreReason ?? "")}</textarea>
+        </div>
+
+        <div class="actions">
+          <button class="btn reject" id="btn-reject">Reject <span class="kbd">R</span></button>
+          <button class="btn maybe"  id="btn-maybe">Maybe  <span class="kbd">M</span></button>
+          <button class="btn accept" id="btn-accept">Accept <span class="kbd">A</span></button>
+        </div>
+      </div>
+
+      <div class="right-col">
+        ${c.hasResume
+          ? `<iframe class="resume-frame" src="/api/candidates/${c.id}/resume#view=FitH" title="resume"></iframe>`
+          : `<div class="no-resume">No resume attached on this candidate.</div>`
+        }
+      </div>
+    </div>
+  `;
+
+  // wire up inputs
+  detail.querySelectorAll(".score-cell").forEach((el) => {
+    el.addEventListener("click", () => setScore(Number(el.dataset.score)));
+  });
+  detail.querySelector(".score-clear")?.addEventListener("click", () => setScore(null));
+  detail.querySelector("#reason-input")?.addEventListener("input", (e) => setReason(e.target.value));
+  detail.querySelector("#email-input")?.addEventListener("input", (e) => setEmail(e.target.value.trim() || null));
+  detail.querySelector("#btn-accept").addEventListener("click", accept);
+  detail.querySelector("#btn-maybe").addEventListener("click", maybe);
+  detail.querySelector("#btn-reject").addEventListener("click", openReject);
+  detail.querySelector("#btn-delete")?.addEventListener("click", openDelete);
+}
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+// ----- keyboard -----
+window.addEventListener("keydown", (e) => {
+  if (state.helpOpen) {
+    if (e.key === "Escape" || e.key === "?") { e.preventDefault(); closeHelp(); }
+    return;
+  }
+  if (state.rejectOpen) {
+    if (e.key === "y" || e.key === "Y") { e.preventDefault(); confirmReject(); }
+    else if (e.key === "n" || e.key === "N" || e.key === "Escape") { e.preventDefault(); closeReject(); }
+    return;
+  }
+  if (state.bulkRejectOpen) {
+    if (e.key === "y" || e.key === "Y") { e.preventDefault(); confirmBulkReject(); }
+    else if (e.key === "n" || e.key === "N" || e.key === "Escape") { e.preventDefault(); closeBulkReject(); }
+    return;
+  }
+  if (state.deleteOpen) {
+    if (e.key === "y" || e.key === "Y") { e.preventDefault(); confirmDelete(); }
+    else if (e.key === "n" || e.key === "N" || e.key === "Escape") { e.preventDefault(); closeDelete(); }
+    return;
+  }
+  const tag = e.target?.tagName?.toLowerCase();
+  const isTyping = tag === "input" || tag === "textarea";
+  if (isTyping) {
+    if (e.key === "Escape") e.target.blur();
+    return;
+  }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+  switch (e.key) {
+    case "j": case "ArrowDown": e.preventDefault(); moveTo(1); return;
+    case "k": case "ArrowUp":   e.preventDefault(); moveTo(-1); return;
+    case "a": case "A":
+      e.preventDefault();
+      if (state.checked.size > 0) bulkAction("accept", "bulk-accept");
+      else accept();
+      return;
+    case "m": case "M":
+      e.preventDefault();
+      if (state.checked.size > 0) bulkAction("maybe", "bulk-maybe");
+      else maybe();
+      return;
+    case "r": case "R":
+      e.preventDefault();
+      if (state.checked.size > 0) openBulkReject();
+      else openReject();
+      return;
+    case "x": case "X": case " ":
+      e.preventDefault();
+      if (state.selectedId) toggleChecked(state.selectedId);
+      return;
+    case "Escape":
+      if (state.checked.size > 0) { e.preventDefault(); clearChecked(); }
+      return;
+    case "/": e.preventDefault(); $("#search-input")?.focus(); $("#search-input")?.select(); return;
+    case "n": case "N": e.preventDefault(); document.getElementById("reason-input")?.focus(); return;
+    case "e": case "E": e.preventDefault(); document.getElementById("email-input")?.focus(); return;
+    case "?": e.preventDefault(); openHelp(); return;
+    case "g": case "G": { const c = selected(); if (c?.github) window.open(c.github, "_blank"); return; }
+    case "l": case "L": { const c = selected(); if (c?.linkedin) window.open(c.linkedin, "_blank"); return; }
+    case "p": case "P": { const c = selected(); if (c?.profileUrl) window.open(c.profileUrl, "_blank"); return; }
+  }
+  if (/^[0-9]$/.test(e.key)) {
+    e.preventDefault();
+    const n = Number(e.key);
+    setScore(n === 0 ? 10 : n);
+  }
+});
+
+// ----- dialog buttons -----
+$("#reject-cancel").addEventListener("click", closeReject);
+$("#reject-confirm").addEventListener("click", confirmReject);
+$("#help-close").addEventListener("click", closeHelp);
+$("#refresh").addEventListener("click", loadList);
+$("#reject-overlay").addEventListener("click", (e) => { if (e.target.id === "reject-overlay") closeReject(); });
+
+// bulk-bar + bulk reject dialog
+$("#bulk-accept").addEventListener("click", () => bulkAction("accept", "bulk-accept"));
+$("#bulk-maybe").addEventListener("click",  () => bulkAction("maybe",  "bulk-maybe"));
+$("#bulk-reject").addEventListener("click", openBulkReject);
+$("#bulk-clear").addEventListener("click", clearChecked);
+$("#bulk-reject-cancel").addEventListener("click", closeBulkReject);
+$("#bulk-reject-confirm").addEventListener("click", confirmBulkReject);
+$("#bulk-reject-overlay").addEventListener("click", (e) => { if (e.target.id === "bulk-reject-overlay") closeBulkReject(); });
+
+// view tabs (Not Started / Maybe)
+$$(".view-tab").forEach((t) => t.addEventListener("click", () => setView(t.dataset.view)));
+
+// delete (archive)
+$("#bulk-delete").addEventListener("click", openBulkDelete);
+$("#delete-cancel").addEventListener("click", closeDelete);
+$("#delete-confirm").addEventListener("click", confirmDelete);
+$("#delete-overlay").addEventListener("click", (e) => { if (e.target.id === "delete-overlay") closeDelete(); });
+
+// search input
+$("#search-input").addEventListener("input", (e) => {
+  state.search = e.target.value;
+  const displayed = displayedCandidates();
+  if (!displayed.find((c) => c.id === state.selectedId)) {
+    state.selectedId = displayed[0]?.id ?? null;
+  }
+  render();
+});
+$("#search-input").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { state.search = ""; e.target.value = ""; e.target.blur(); const d = displayedCandidates(); state.selectedId = d[0]?.id ?? null; render(); }
+  else if (e.key === "Enter" || e.key === "ArrowDown") { e.preventDefault(); e.target.blur(); }
+});
+$("#help-overlay").addEventListener("click", (e) => { if (e.target.id === "help-overlay") closeHelp(); });
+
+// ----- boot -----
+loadList();
+</script>
+</body>
+</html>
