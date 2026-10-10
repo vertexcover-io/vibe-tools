@@ -115,7 +115,11 @@ for dirname, commit_date in tools_with_dates:
     print()
 
 ]]]-->
-## 10 tools
+## 11 tools
+
+### [browser-flows](https://github.com/vertexcover-io/vibe-tools/tree/master/browser-flows#readme) (2026-10-10 04:29)
+
+*No description available — auto-summary unavailable.*
 
 ### [hiring-triage](https://github.com/vertexcover-io/vibe-tools/tree/master/hiring-triage#readme) (2026-10-09 13:06)
 
