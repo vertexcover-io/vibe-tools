@@ -1,0 +1,27 @@
+{
+  "flows": [
+    {
+      "name": "example-github-issue",
+      "description": "Open a new issue on a GitHub repo with a title and body.",
+      "start_url": "https://github.com/{{repo}}/issues/new",
+      "inputs": {
+        "repo": "owner/name of the repo",
+        "title": "issue title",
+        "body": "issue body"
+      },
+      "steps": 5,
+      "updated": "2026-10-10"
+    },
+    {
+      "name": "gmail-unread-triage",
+      "description": "Triage unread Gmail in the Vertexcover inbox. Flow steps: search is:unread, then click Mark as read. Between those two steps the agent must read the result rows and tick the checkboxes of messages that look like spam, marketing, newsletters or automated notifications; leave real human mail unchecked and report it as interesting. Checkbox ids in Gmail change every load, so those clicks are not recorded as steps. Agent tip: rows are tr.zA (innerText gives sender, subject, snippet); tick with row.querySelector('div[role=\"checkbox\"]').click().",
+      "start_url": "https://mail.google.com/mail/u/{{account}}/#search/{{query}}",
+      "inputs": {
+        "account": "Gmail account index in the URL (u/0, u/1 ...)",
+        "query": "Gmail search query"
+      },
+      "steps": 3,
+      "updated": ""
+    }
+  ]
+}

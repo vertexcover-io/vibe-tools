@@ -1,0 +1,75 @@
+{
+  "name": "example-github-issue",
+  "description": "Open a new issue on a GitHub repo with a title and body.",
+  "start_url": "https://github.com/{{repo}}/issues/new",
+  "inputs": {
+    "repo": {
+      "description": "owner/name of the repo",
+      "example": "vertexcover-io/vibe-tools",
+      "required": true
+    },
+    "title": {
+      "description": "issue title",
+      "example": "Fix the thing",
+      "required": true
+    },
+    "body": {
+      "description": "issue body",
+      "example": "Steps to reproduce...",
+      "default": ""
+    }
+  },
+  "steps": [
+    {
+      "id": 1,
+      "type": "navigate",
+      "url": "https://github.com/{{repo}}/issues/new"
+    },
+    {
+      "id": 2,
+      "type": "fill",
+      "desc": "Title field",
+      "selectors": [
+        "css:#issue_title",
+        "label:Title",
+        "css:input[aria-label=\"Add a title\"]"
+      ],
+      "value": "{{title}}"
+    },
+    {
+      "id": 3,
+      "type": "fill",
+      "desc": "Body editor",
+      "selectors": [
+        "css:#issue_body",
+        "label:Add a description",
+        "css:textarea"
+      ],
+      "value": "{{body}}",
+      "optional": true
+    },
+    {
+      "id": 4,
+      "type": "click",
+      "desc": "Cookie banner close",
+      "selectors": [
+        "text~:Accept",
+        "text:Accept",
+        "css:[aria-label=\"Dismiss\"]"
+      ],
+      "optional": true,
+      "timeout": 1500
+    },
+    {
+      "id": 5,
+      "type": "click",
+      "desc": "Submit new issue button",
+      "selectors": [
+        "text:Submit new issue",
+        "css:button[type=\"submit\"]"
+      ],
+      "navigates": true
+    }
+  ],
+  "updated": "2026-10-10"
+}

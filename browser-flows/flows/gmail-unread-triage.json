@@ -1,0 +1,43 @@
+{
+  "name": "gmail-unread-triage",
+  "description": "Triage unread Gmail in the Vertexcover inbox. Flow steps: search is:unread, then click Mark as read. Between those two steps the agent must read the result rows and tick the checkboxes of messages that look like spam, marketing, newsletters or automated notifications; leave real human mail unchecked and report it as interesting. Checkbox ids in Gmail change every load, so those clicks are not recorded as steps. Agent tip: rows are tr.zA (innerText gives sender, subject, snippet); tick with row.querySelector('div[role=\"checkbox\"]').click().",
+  "start_url": "https://mail.google.com/mail/u/{{account}}/#search/{{query}}",
+  "inputs": {
+    "account": {
+      "description": "Gmail account index in the URL (u/0, u/1 ...)",
+      "example": "0",
+      "default": "0"
+    },
+    "query": {
+      "description": "Gmail search query",
+      "example": "is:unread",
+      "default": "is:unread"
+    }
+  },
+  "steps": [
+    {
+      "id": 1,
+      "type": "navigate",
+      "url": "https://mail.google.com/mail/u/{{account}}/#search/{{query}}"
+    },
+    {
+      "id": 2,
+      "type": "wait_for",
+      "desc": "Result rows loaded",
+      "selectors": [
+        "css:tr.zA div[role=\"checkbox\"]"
+      ],
+      "timeout": 10000
+    },
+    {
+      "id": 3,
+      "type": "click",
+      "desc": "Mark as read (after agent ticks the junk rows)",
+      "selectors": [
+        "css:div[aria-label=\"Mark as read\"]",
+        "label:Mark as read",
+        "text:Mark as read"
+      ]
+    }
+  ]
+}
