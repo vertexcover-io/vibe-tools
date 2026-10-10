@@ -1,0 +1,1 @@
+Launches another Claude Code session from the command line with pluggable surface (tmux, cmux, Ghostty, Terminal.app or headless), mode (interactive or headless), and starting context (fresh, parent-session summary, or forked transcript).

@@ -1,0 +1,1 @@
+Command-line access to Granola meeting notes and transcripts through its private API: filter meetings by name, attendee, date or folder, then print the transcript or AI notes, authenticating from the local desktop app's session file.

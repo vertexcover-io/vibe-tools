@@ -1,0 +1,1 @@
+Records a browser task once through a Chrome extension that captures clicks, typing and spoken narration, converts it into a JSON flow with named inputs, and replays it later through Claude in Chrome with fast deterministic steps and model-driven recovery only when a step breaks.

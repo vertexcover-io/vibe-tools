@@ -1,0 +1,1 @@
+Chrome extension that clips LinkedIn profiles into a Notion database, from the profile page or by right-clicking a name in any list, capturing name, URL, headline, company, title and location while blocking duplicates by normalized profile URL.

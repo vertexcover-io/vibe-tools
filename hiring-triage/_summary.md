@@ -1,0 +1,1 @@
+Keyboard-driven local web app for triaging job applicants stored in a Notion database: it lists candidates for a position by status, shows score, notes, links and resume side by side, and accepts, parks or rejects each with one key, sending a rejection email through Gmail.

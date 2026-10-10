@@ -1,0 +1,1 @@
+Classifies an "Ask HN: Who is hiring?" post, job page, or pasted text into 16 structured fields (work mode, region, salary bucket, company stage, job functions, and more) in a single call to TypeSafe's Jev model.

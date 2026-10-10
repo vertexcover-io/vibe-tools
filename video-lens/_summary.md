@@ -1,0 +1,1 @@
+Fetches a YouTube video's timestamped transcript and caches it locally so it can be read, searched, sliced by time range, or summarized; also ships as a Claude Code skill that answers questions from the transcript.

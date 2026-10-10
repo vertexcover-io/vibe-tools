@@ -1,0 +1,1 @@
+Inspects, patches, repacks and re-signs any installed Electron app on macOS, handling asar integrity and fuse checks, stable self-signed identities so logins persist, and auto-update neutering; a companion slash command plans and self-tests the mod with Claude.
