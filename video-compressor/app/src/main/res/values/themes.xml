@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AI-generated. See PROMPT.md for the prompts and model used. -->
+<resources>
+    <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorPrimary">@color/accent</item>
+    </style>
+    <color name="accent">#2E7D6B</color>
+    <color name="icon_bg">#2E7D6B</color>
+</resources>

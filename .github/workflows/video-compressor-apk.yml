@@ -1,0 +1,32 @@
+name: Build video-compressor APK
+
+on:
+  push:
+    paths:
+      - 'video-compressor/**'
+      - '.github/workflows/video-compressor-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: video-compressor
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: ./gradlew --no-daemon assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: video-compressor-apk
+          path: video-compressor/app/build/outputs/apk/debug/app-debug.apk
