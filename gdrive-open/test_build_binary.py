@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 SPEC = importlib.util.spec_from_file_location("gdrive_open_build", Path(__file__).with_name("build-binary.py"))
@@ -16,6 +17,16 @@ SPEC.loader.exec_module(BUILD)
 
 
 class BuildCredentialTests(unittest.TestCase):
+    def test_successful_build_reports_exact_executable_path_for_installer(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = Path(directory) / "executable-path"
+            executable = Path(directory) / "platform dir" / "gdrive-open"
+            with patch.object(BUILD, "build_binary", return_value=executable), patch(
+                "sys.argv", ["build-binary.py", "--executable-path-file", str(manifest)],
+            ):
+                self.assertEqual(BUILD.main(), 0)
+            self.assertEqual(manifest.read_text(), executable.as_posix() + "\n")
+
     def test_only_desktop_client_fields_are_staged(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

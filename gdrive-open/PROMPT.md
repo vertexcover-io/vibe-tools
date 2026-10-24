@@ -110,3 +110,20 @@ User asked: "Create a shell script to create a binary for the platform and commi
   remain ignored; all tool source/documentation changes are committed on the feature branch.
 - Validated Bash syntax and built the macOS ARM64 executable from outside the repository
   with a client-config path containing spaces; the packaged executable passed its help check.
+
+## Iteration: native binary installation
+
+Model/agent: Codex (GPT-6).
+
+User asked: "Commit to vibe-tools and push , cleanup worktree", then
+"Create a install.sh shell script that will build the correct binary for the platform and then install it".
+
+- Added `install.sh` with a default user installation in `~/.local/bin`, configurable
+  `--bin-dir`, and optional `--client-config`. It uses the existing native build pipeline.
+- The builder writes its exact executable path for the installer, avoiding duplicate
+  platform detection. Installation stages the executable before replacing an older copy.
+- Added checks for paths with spaces, failure preservation, invalid options, and the
+  Windows executable name. Documented PATH setup, upgrades, and removal.
+- Validation: 47 Python tests and installer shell checks passed. A real macOS ARM64
+  build installed successfully into a temporary path containing spaces and ran `--help`.
+  Windows/Linux execution still requires testing on those operating systems.

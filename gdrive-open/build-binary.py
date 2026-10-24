@@ -93,11 +93,14 @@ def build_binary(client_config: Path | None) -> Path:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--client-config", type=Path, help="Desktop OAuth client JSON to bundle (never a token.json)")
+    parser.add_argument("--executable-path-file", type=Path, help="Write the built executable path for an installer")
     args = parser.parse_args()
     bundled = ROOT / "oauth-client.json"
     client_config = args.client_config or (bundled if bundled.is_file() else None)
     try:
-        build_binary(client_config.expanduser() if client_config else None)
+        executable = build_binary(client_config.expanduser() if client_config else None)
+        if args.executable_path_file is not None:
+            args.executable_path_file.write_text(executable.as_posix() + "\n", encoding="utf-8", newline="\n")
     except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
         print(f"Build failed: {error}", file=sys.stderr)
         return 1

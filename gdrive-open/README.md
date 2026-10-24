@@ -142,6 +142,26 @@ legacy format safely. CSV sync exports only the first Sheet. Google Drive's regu
 endpoint has a 10 MB limit, and Office-to-Google conversion can change unsupported features;
 review a sync result before relying on it.
 
+## Install a binary
+
+Install `uv`, then run from this folder:
+
+```sh
+./install.sh --client-config /path/to/desktop-client.json
+```
+
+This builds for the current OS/CPU and installs `gdrive-open` into `~/.local/bin`
+(`gdrive-open.exe` on Windows). Use `--bin-dir /path/to/bin` to choose another directory.
+No sudo is needed for the default location. If that directory is missing from PATH,
+the script prints an export command; add it to your shell startup file for future sessions.
+Use Bash on macOS/Linux or Git Bash with native Windows `uv`; WSL installs a Linux binary.
+
+Rerun to upgrade. The existing executable is replaced only after a successful build and
+copy. Close a running Windows executable before upgrading. To uninstall, remove the
+installed executable; account credentials and file mappings are kept separately.
+Omit `--client-config` to use a sibling `oauth-client.json`, or supply `--credentials`
+when running the installed app if no client was bundled.
+
 ## Build a binary
 
 Install `uv`, then run from this folder:
@@ -168,7 +188,7 @@ Build on each target OS/architecture: PyInstaller does not cross-compile. The lo
 has been tested on macOS Apple Silicon; Windows and Linux builds still need testing on
 those hosts. Linux users need a working Secret Service credential store. macOS builds
 are locally signed by PyInstaller, but are not Developer ID signed or notarized for public
-distribution. No installer or automatic file-association registration is included.
+distribution. The shell installer does not register automatic file associations.
 Generated binaries, archives, and checksums stay in the ignored `dist/` directory; Git
 tracks the build scripts and source.
 
@@ -177,6 +197,7 @@ tracks the build scripts and source.
 ```sh
 uv run --with google-api-python-client --with google-auth-oauthlib --with keyring --with rich \
   python -m unittest discover -s . -p 'test_*.py'
+bash test_install.sh
 ```
 
 Tests use temporary databases and fake Google/credential-store adapters; they do not sign
