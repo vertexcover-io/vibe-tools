@@ -1,0 +1,5 @@
+# Per-user credentials/state must not be shipped with the app.
+token.json
+credentials.json
+*.sqlite3
+*.sqlite3-*

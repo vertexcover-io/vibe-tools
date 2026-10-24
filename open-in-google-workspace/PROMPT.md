@@ -32,3 +32,30 @@ automatic synchronization.
   open-once behavior, remote export, and local-edit conflict protection.
 - Ran `uv run --no-project python -m unittest open-in-google-workspace/test_open_in_google_workspace.py`.
 - Ran `uv run open-in-google-workspace/open-in-google-workspace.py --help`.
+
+## Iteration: built-in login for distribution
+
+Model/agent: Codex (GPT-6 Astra).
+
+User asked: "Can i add oauth login support to the app itself so that anyone can login using
+their own account to use the app", then "Update" after discussing bundled Desktop client
+configuration, login/logout/reconnect, secure storage, PKCE, and account-specific mappings.
+
+- Added `login`, `reconnect`, `logout`, and offline `whoami`; opening a file also starts
+  authorization when there is no saved login.
+- Loads a distributable `oauth-client.json` beside the script, with existing per-user and
+  explicit developer configuration overrides. A real publisher client was not supplied
+  during implementation; this checkout does not contain invented credentials.
+- Uses PKCE, account selection, offline access, and a three-minute loopback callback timeout.
+- Stores each active login in a native OS credential store with no plaintext fallback.
+- Keys file mappings by Google's stable Drive permission ID and OAuth client ID. Switching
+  accounts cannot reuse another account's file mappings.
+- Migrates old mappings only using the verified original token's account; removes the old
+  plaintext token only after credentials and mappings are persisted. Expired legacy tokens
+  leave old mappings protected while allowing a new explicit login.
+- Regression tests cover account isolation, secure-store failures, token refresh, cancelled
+  and revoked login, CLI commands, consent parameters, and legacy migration/retry.
+- Validation: 39 unit tests passed with Google and credential-store boundaries mocked;
+  Ruff and `git diff --check` passed, and the script's `--help` exposes the new commands.
+- No live Google consent, real keychain operation, or Windows/Linux end-to-end run was
+  performed. These remain release checks once the publisher supplies its Desktop client.

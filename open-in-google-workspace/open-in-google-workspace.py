@@ -2,15 +2,17 @@
 # AI-generated. See PROMPT.md for the prompts and model used.
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["google-api-python-client>=2.0.0", "google-auth-oauthlib>=1.2.0"]
+# dependencies = ["google-api-python-client>=2,<3", "google-auth-oauthlib>=1.2,<2", "keyring>=25,<26"]
 # ///
 """Open local office files in Google Workspace and explicitly pull remote edits."""
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+from contextlib import closing
+from dataclasses import dataclass, field
 from enum import Enum
 import hashlib
+import json
 import os
 from pathlib import Path
 import sqlite3
@@ -251,8 +253,9 @@ def replace_file_atomically(destination: Path, content: bytes) -> None:
 class SqliteMappingStore:
     """Persist local-file to Drive-file identities in a user-owned SQLite database."""
 
-    def __init__(self, database_path: Path) -> None:
+    def __init__(self, database_path: Path, *, account_key: str = "") -> None:
         self.database_path = database_path
+        self.account_key = account_key
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
@@ -262,7 +265,7 @@ class SqliteMappingStore:
         return connection
 
     def _initialize(self) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS mappings (
@@ -275,15 +278,44 @@ class SqliteMappingStore:
                 )
                 """
             )
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS account_mappings ("
+                "account_key TEXT NOT NULL, source_path TEXT NOT NULL, drive_id TEXT NOT NULL, "
+                "workspace_mime_type TEXT NOT NULL, export_mime_type TEXT NOT NULL, "
+                "baseline_hash TEXT NOT NULL, drive_version TEXT NOT NULL, "
+                "PRIMARY KEY(account_key, source_path))"
+            )
+            connection.execute("CREATE TABLE IF NOT EXISTS legacy_owner (account_key TEXT PRIMARY KEY)")
+
+    def migrate_legacy(self) -> None:
+        """Bind old mappings only after authenticating the original token's owner."""
+        if not self.account_key:
+            raise ValueError("An account is required to migrate legacy mappings")
+        with closing(self._connect()) as connection, connection:
+            owner = connection.execute("SELECT account_key FROM legacy_owner").fetchone()
+            if owner is not None and owner[0] != self.account_key:
+                raise ValueError("The legacy mappings belong to a different account")
+            connection.execute(
+                "INSERT OR IGNORE INTO account_mappings SELECT ?, source_path, drive_id, "
+                "workspace_mime_type, export_mime_type, baseline_hash, drive_version FROM mappings",
+                (self.account_key,),
+            )
+            connection.execute("INSERT OR IGNORE INTO legacy_owner VALUES (?)", (self.account_key,))
 
     def get(self, source_path: Path) -> Mapping | None:
         source_key = str(source_path.resolve())
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT source_path, drive_id, workspace_mime_type, export_mime_type, "
-                "baseline_hash, drive_version FROM mappings WHERE source_path = ?",
-                (source_key,),
-            ).fetchone()
+        with closing(self._connect()) as connection:
+            if self.account_key:
+                row = connection.execute(
+                    "SELECT * FROM account_mappings WHERE account_key = ? AND source_path = ?",
+                    (self.account_key, source_key),
+                ).fetchone()
+                legacy = connection.execute("SELECT 1 FROM mappings WHERE source_path = ?", (source_key,)).fetchone()
+                owner = connection.execute("SELECT 1 FROM legacy_owner").fetchone()
+                if row is None and legacy and not owner:
+                    raise ValueError("Unclaimed legacy mapping: restore the original token.json and OAuth client to migrate it safely")
+            else:
+                row = connection.execute("SELECT * FROM mappings WHERE source_path = ?", (source_key,)).fetchone()
         if row is None:
             return None
         return Mapping(
@@ -297,7 +329,19 @@ class SqliteMappingStore:
 
     def upsert(self, mapping: Mapping) -> None:
         source_key = str(mapping.source_path.resolve())
-        with self._connect() as connection:
+        if self.account_key:
+            with closing(self._connect()) as connection, connection:
+                connection.execute(
+                    "INSERT INTO account_mappings VALUES (?, ?, ?, ?, ?, ?, ?) "
+                    "ON CONFLICT(account_key, source_path) DO UPDATE SET "
+                    "drive_id=excluded.drive_id, workspace_mime_type=excluded.workspace_mime_type, "
+                    "export_mime_type=excluded.export_mime_type, baseline_hash=excluded.baseline_hash, "
+                    "drive_version=excluded.drive_version",
+                    (self.account_key, source_key, mapping.drive_id, mapping.workspace_mime_type,
+                     mapping.export_mime_type, mapping.baseline_hash, mapping.drive_version),
+                )
+            return
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 """
                 INSERT INTO mappings (
@@ -402,37 +446,238 @@ def default_state_dir() -> Path:
     return Path(config_home or Path.home() / ".config") / "open-in-google-workspace"
 
 
-def create_google_drive_gateway(credentials_path: Path, token_path: Path) -> GoogleDriveGateway:
-    """Authenticate a desktop user and return a Drive client limited to this app's files."""
-    if not credentials_path.is_file():
-        raise ValueError(
-            "Missing OAuth desktop-client JSON. Create one in Google Cloud, then place it at "
-            f"{credentials_path} or pass --credentials PATH."
-        )
-    from google.auth.transport.requests import Request
-    from google.oauth2.credentials import Credentials
-    from google_auth_oauthlib.flow import InstalledAppFlow
-    from googleapiclient.discovery import build
+AUTH_URI = "https://accounts.google.com/o/oauth2/auth"
+TOKEN_URI = "https://oauth2.googleapis.com/token"
+BUNDLED_CLIENT = Path(__file__).with_name("oauth-client.json")
 
-    credentials: object | None = None
-    if token_path.is_file():
-        credentials = Credentials.from_authorized_user_file(str(token_path), [DRIVE_SCOPE])
-    is_valid = bool(getattr(credentials, "valid", False))
-    if not is_valid:
-        is_expired = bool(getattr(credentials, "expired", False))
-        refresh_token = getattr(credentials, "refresh_token", None)
-        refresh = getattr(credentials, "refresh", None)
-        if is_expired and isinstance(refresh_token, str) and refresh_token and callable(refresh):
-            refresh(Request())
+
+class LoginRequired(ValueError):
+    """The user must explicitly reconnect their Google account."""
+
+
+@dataclass(frozen=True)
+class OAuthClient:
+    client_id: str
+    client_secret: str = field(repr=False)
+
+    def google_config(self) -> dict[str, object]:
+        return {"installed": {
+            "client_id": self.client_id, "client_secret": self.client_secret,
+            "auth_uri": AUTH_URI, "token_uri": TOKEN_URI,
+            "redirect_uris": ["http://localhost"],
+        }}
+
+
+@dataclass(frozen=True)
+class Account:
+    permission_id: str
+    email: str
+
+    def key(self, client: OAuthClient) -> str:
+        return hashlib.sha256(json.dumps([client.client_id, self.permission_id]).encode()).hexdigest()
+
+
+@dataclass(frozen=True)
+class LoginSession:
+    account: Account
+    credentials_json: str = field(repr=False)
+    drive: DriveGateway = field(repr=False)
+
+
+class TokenVault(Protocol):
+    def read(self) -> str | None: ...
+    def write(self, value: str) -> None: ...
+    def clear(self) -> None: ...
+
+
+class LoginProvider(Protocol):
+    def login(self, client: OAuthClient) -> LoginSession: ...
+    def resume(self, client: OAuthClient, credentials_json: str) -> LoginSession: ...
+
+
+def json_object(raw: str) -> dict[str, object]:
+    try:
+        value = json.loads(raw)
+    except (ValueError, TypeError):
+        raise ValueError("Invalid JSON configuration or saved login") from None
+    if not isinstance(value, dict):
+        raise ValueError("Expected a JSON object")
+    return {str(key): item for key, item in value.items()}
+
+
+def required_string(value: object, name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"Missing or invalid {name}")
+    return value
+
+
+def load_oauth_client(
+    override: Path | None, state_dir: Path, bundled_path: Path = BUNDLED_CLIENT,
+) -> OAuthClient:
+    """One distributable Desktop client identifies the app for all its users."""
+    candidates = (state_dir / "credentials.json", bundled_path)
+    selected = override.expanduser() if override else next((p for p in candidates if p.is_file()), None)
+    if selected is None:
+        raise ValueError(
+            "This build has no OAuth client configured. The publisher must bundle oauth-client.json "
+            "beside the script. Developers can use --credentials /path/to/desktop-client.json."
+        )
+    installed = json_object(selected.read_text(encoding="utf-8")).get("installed")
+    if not isinstance(installed, dict):
+        raise ValueError("OAuth configuration must be for a Desktop app (installed), not a web client")
+    client_id = required_string(installed.get("client_id"), "OAuth client ID")
+    secret = required_string(installed.get("client_secret"), "Desktop client secret")
+    if not client_id.endswith(".apps.googleusercontent.com"):
+        raise ValueError("Expected a Google OAuth client ID")
+    if installed.get("auth_uri", AUTH_URI) not in {AUTH_URI, "https://accounts.google.com/o/oauth2/v2/auth"}:
+        raise ValueError("OAuth authorization endpoint must be Google")
+    if installed.get("token_uri", TOKEN_URI) != TOKEN_URI:
+        raise ValueError("OAuth token endpoint must be Google")
+    return OAuthClient(client_id, secret)
+
+
+class SystemTokenVault:
+    """Use an OS credential store explicitly; never fall back to plaintext backends."""
+
+    def __init__(self, client: OAuthClient, state_dir: Path) -> None:
+        self.username = hashlib.sha256(json.dumps([client.client_id, str(state_dir.resolve())]).encode()).hexdigest()
+        self.service = "open-in-google-workspace"
+        self.backend = self._native_backend()
+
+    @staticmethod
+    def _native_backend() -> object:
+        try:
+            if sys.platform == "darwin":
+                from keyring.backends.macOS import Keyring
+                return Keyring()
+            if sys.platform == "win32":
+                from keyring.backends.Windows import WinVaultKeyring
+                return WinVaultKeyring()
+            from keyring.backends.SecretService import Keyring as SecretServiceKeyring
+            return SecretServiceKeyring()
+        except (ImportError, RuntimeError):
+            raise ValueError("OS credential store unavailable. On Linux, install and unlock a Secret Service keyring.") from None
+
+    def _call(self, method: str, *arguments: str) -> object:
+        operation = getattr(self.backend, method)
+        try:
+            return operation(self.service, self.username, *arguments)
+        except Exception:
+            # Backends expose different OS exceptions; never print their secret-bearing arguments.
+            raise ValueError("Cannot access the OS credential store. Unlock it and try again; no plaintext fallback is used.") from None
+
+    def read(self) -> str | None:
+        value = self._call("get_password")
+        if value is not None and not isinstance(value, str):
+            raise ValueError("Invalid credential-store response")
+        return value
+
+    def write(self, value: str) -> None:
+        self._call("set_password", value)
+
+    def clear(self) -> None:
+        if self.read() is not None:
+            self._call("delete_password")
+
+
+def saved_login(session: LoginSession) -> str:
+    return json.dumps({"account_id": session.account.permission_id, "email": session.account.email,
+                       "credentials": session.credentials_json})
+
+
+def account_from_saved(value: str) -> Account:
+    record = json_object(value)
+    return Account(required_string(record.get("account_id"), "account ID"),
+                   required_string(record.get("email"), "account email"))
+
+
+def connect_account(
+    *, client: OAuthClient, state_dir: Path, vault: TokenVault,
+    provider: LoginProvider, force_login: bool = False,
+) -> LoginSession:
+    saved = vault.read()  # Detect a missing/locked keyring before asking for browser consent.
+    legacy_token = state_dir / "token.json"
+    if legacy_token.is_file():
+        try:
+            legacy = provider.resume(client, legacy_token.read_text(encoding="utf-8"))
+        except LoginRequired:
+            if not saved and not force_login:
+                raise LoginRequired("Legacy login cannot be restored. Run login; old mappings will remain protected.") from None
+            print("Legacy login could not be verified; token.json and unclaimed mappings were preserved.", file=sys.stderr)
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), [DRIVE_SCOPE])
-            credentials = flow.run_local_server(port=0)
-        to_json = getattr(credentials, "to_json", None)
-        if not callable(to_json):
-            raise ValueError("Google OAuth did not return usable credentials")
-        token_path.parent.mkdir(parents=True, exist_ok=True)
-        token_path.write_text(to_json(), encoding="utf-8")
-    return GoogleDriveGateway(build("drive", "v3", credentials=credentials, cache_discovery=False))
+            vault.write(saved_login(legacy) if saved is None else saved)
+            SqliteMappingStore(state_dir / "mappings.sqlite3", account_key=legacy.account.key(client)).migrate_legacy()
+            legacy_token.unlink()
+            print("Migrated the legacy login to the OS credential store and removed token.json.")
+            saved = vault.read()
+    if saved and not force_login:
+        credentials = required_string(json_object(saved).get("credentials"), "saved credentials")
+        session = provider.resume(client, credentials)
+        if session.account.permission_id != account_from_saved(saved).permission_id:
+            raise ValueError("Saved login resolved to a different account. Run login to reconnect.")
+    else:
+        session = provider.login(client)
+    vault.write(saved_login(session))
+    return session
+
+
+class GoogleLoginProvider:
+    def login(self, client: OAuthClient) -> LoginSession:
+        from google_auth_oauthlib.flow import InstalledAppFlow
+
+        flow = InstalledAppFlow.from_client_config(
+            client.google_config(), [DRIVE_SCOPE], autogenerate_code_verifier=True,
+        )
+        try:
+            credentials = flow.run_local_server(
+                host="127.0.0.1", port=0, timeout_seconds=180,
+                prompt="consent select_account", access_type="offline",
+                success_message="Google Drive connected. You can close this tab.",
+            )
+        except (AttributeError, TimeoutError):
+            raise LoginRequired("Login did not finish within three minutes. Run login again.") from None
+        return self._session(credentials)
+
+    def resume(self, client: OAuthClient, credentials_json: str) -> LoginSession:
+        from google.auth.exceptions import RefreshError
+        from google.auth.transport.requests import Request
+        from google.oauth2.credentials import Credentials
+
+        value = json_object(credentials_json)
+        if value.get("client_id") != client.client_id:
+            raise LoginRequired("Saved login belongs to another OAuth client. Use the original client configuration.")
+        if value.get("token_uri", TOKEN_URI) != TOKEN_URI:
+            raise LoginRequired("Saved login has an invalid token endpoint. Run login again.")
+        try:
+            credentials = Credentials.from_authorized_user_info(value, [DRIVE_SCOPE])
+        except ValueError:
+            raise LoginRequired("Saved login is incomplete. Run login again.") from None
+        if not credentials.valid:
+            try:
+                credentials.refresh(Request())
+            except RefreshError as error:
+                if error.retryable:
+                    raise ValueError("Google login refresh is temporarily unavailable. Try again later.") from None
+                raise LoginRequired("Google login expired or was revoked. Run login to reconnect.") from None
+        return self._session(credentials)
+
+    def _session(self, credentials: object) -> LoginSession:
+        from googleapiclient.discovery import build
+
+        if not getattr(credentials, "refresh_token", None):
+            raise LoginRequired("Google did not grant offline access. Run login and approve Drive access.")
+        granted = getattr(credentials, "granted_scopes", None)
+        if granted is not None and DRIVE_SCOPE not in granted:
+            raise LoginRequired("Drive access was not granted. Run login and approve Drive access.")
+        service = build("drive", "v3", credentials=credentials, cache_discovery=False)
+        response = service.about().get(fields="user(permissionId,emailAddress)").execute()
+        user = response.get("user", {}) if isinstance(response, dict) else {}
+        if not isinstance(user, dict):
+            raise ValueError("Google returned invalid account details")
+        account = Account(required_string(user.get("permissionId"), "Drive account ID"),
+                          required_string(user.get("emailAddress"), "Drive account email"))
+        serialize = getattr(credentials, "to_json")
+        return LoginSession(account, serialize(strip=["id_token"]), GoogleDriveGateway(service))
 
 
 def parser() -> argparse.ArgumentParser:
@@ -440,50 +685,109 @@ def parser() -> argparse.ArgumentParser:
     argument_parser = argparse.ArgumentParser(
         description="Open local office files in Google Workspace and explicitly pull remote edits."
     )
-    argument_parser.add_argument("--state-dir", type=Path, help="Directory for the local mapping database and OAuth token")
-    argument_parser.add_argument("--credentials", type=Path, help="Google OAuth desktop-client JSON path")
+    argument_parser.add_argument("--state-dir", type=Path, help="Directory for local file mappings (tokens stay in the OS credential store)")
+    argument_parser.add_argument("--credentials", type=Path, help="Developer override for the bundled Desktop OAuth client JSON")
     subparsers = argument_parser.add_subparsers(dest="command", required=True)
+    for command, help_text in (
+        ("login", "Connect Google Drive, or choose a different account"),
+        ("reconnect", "Authorize Google Drive again after login expires"),
+        ("logout", "Remove this client's saved login from this device"),
+        ("whoami", "Show the locally saved Google account without a network request"),
+    ):
+        subparsers.add_parser(command, help=help_text)
     for command in ("open", "sync", "status"):
         command_parser = subparsers.add_parser(command)
         command_parser.add_argument("path", type=Path)
     return argument_parser
 
 
-def main(arguments: list[str] | None = None) -> int:
-    """Run the user-facing command and return a shell status code."""
-    arguments_namespace = parser().parse_args(arguments)
-    source_path = arguments_namespace.path.expanduser()
-    state_dir = (arguments_namespace.state_dir or default_state_dir()).expanduser()
-    store = SqliteMappingStore(state_dir / "mappings.sqlite3")
-    try:
-        if arguments_namespace.command == "status":
-            mapping = store.get(source_path)
-            if mapping is None:
-                print("Not opened yet")
-                return 1
-            print(f"Drive ID: {mapping.drive_id}\nSaved Drive version: {mapping.drive_version}")
-            return 0
+def require_saved_account(vault: TokenVault) -> Account:
+    saved = vault.read()
+    if saved is None:
+        raise LoginRequired("Not connected. Run login to connect Google Drive.")
+    return account_from_saved(saved)
+
+
+def show_status(source_path: Path, store: SqliteMappingStore) -> int:
+    mapping = store.get(source_path)
+    if mapping is None:
+        print("Not opened yet for this Google account")
+        return 1
+    print(f"Drive ID: {mapping.drive_id}\nSaved Drive version: {mapping.drive_version}")
+    return 0
+
+
+def run_command(args: argparse.Namespace) -> int:
+    state_dir = (args.state_dir or default_state_dir()).expanduser()
+    source_path = args.path.expanduser() if hasattr(args, "path") else None
+    if source_path is not None and args.command in {"open", "sync"}:
         if not source_path.is_file():
             raise ValueError(f"Local file does not exist: {source_path}")
-        credentials_path = (arguments_namespace.credentials or state_dir / "credentials.json").expanduser()
-        drive = create_google_drive_gateway(credentials_path, state_dir / "token.json")
-        if arguments_namespace.command == "open":
-            result = open_local_file(source_path, store, drive, SystemBrowser())
-            action = "Imported and opened" if result.created else "Opened"
-            print(f"{action}: {result.remote_file.web_view_link}")
-            return 0
-        result = sync_remote_file(source_path, store, drive)
-        messages = {
-            SyncDecision.UP_TO_DATE: "No remote changes to download.",
-            SyncDecision.DOWNLOAD_REMOTE: "Downloaded remote Google Workspace changes.",
-            SyncDecision.LOCAL_CHANGED: "Sync stopped: the local file changed since its last baseline.",
-            SyncDecision.CONFLICT: "Sync stopped: both the local and Google Workspace files changed.",
-        }
-        print(messages[result.decision])
-        return 0 if result.decision in {SyncDecision.UP_TO_DATE, SyncDecision.DOWNLOAD_REMOTE} else 2
-    except (OSError, ValueError) as error:
+        format_for_path(source_path)
+    client = load_oauth_client(args.credentials, state_dir)
+    vault = SystemTokenVault(client, state_dir)
+    if args.command == "whoami":
+        print(f"Connected as {require_saved_account(vault).email}")
+        return 0
+    if args.command == "logout":
+        vault.clear()
+        legacy = state_dir / "token.json"
+        if legacy.is_file():
+            legacy.unlink()
+            print("Removed legacy token.json. Unclaimed legacy file mappings are preserved.")
+        print("Signed out on this device. Drive files and local mappings are preserved.")
+        return 0
+    if args.command == "status":
+        account = require_saved_account(vault)
+        assert source_path is not None
+        return show_status(source_path, SqliteMappingStore(state_dir / "mappings.sqlite3", account_key=account.key(client)))
+    session = connect_account(
+        client=client, state_dir=state_dir, vault=vault, provider=GoogleLoginProvider(),
+        force_login=args.command in {"login", "reconnect"},
+    )
+    if args.command in {"login", "reconnect"}:
+        print(f"Connected as {session.account.email}")
+        return 0
+    assert source_path is not None
+    store = SqliteMappingStore(state_dir / "mappings.sqlite3", account_key=session.account.key(client))
+    if args.command == "open":
+        opened = open_local_file(source_path, store, session.drive, SystemBrowser())
+        action = "Imported and opened" if opened.created else "Opened"
+        print(f"{action}: {opened.remote_file.web_view_link}")
+        return 0
+    synced = sync_remote_file(source_path, store, session.drive)
+    messages = {
+        SyncDecision.UP_TO_DATE: "No remote changes to download.",
+        SyncDecision.DOWNLOAD_REMOTE: "Downloaded remote Google Workspace changes.",
+        SyncDecision.LOCAL_CHANGED: "Sync stopped: the local file changed since its last baseline.",
+        SyncDecision.CONFLICT: "Sync stopped: both the local and Google Workspace files changed.",
+    }
+    print(messages[synced.decision])
+    return 0 if synced.decision in {SyncDecision.UP_TO_DATE, SyncDecision.DOWNLOAD_REMOTE} else 2
+
+
+def main(arguments: list[str] | None = None) -> int:
+    """Keep authentication errors and tokens out of tracebacks and terminal logs."""
+    args = parser().parse_args(arguments)
+    from google.auth.exceptions import GoogleAuthError
+    from googleapiclient.errors import HttpError
+    from oauthlib.oauth2 import OAuth2Error
+    from requests.exceptions import RequestException
+
+    try:
+        return run_command(args)
+    except (GoogleAuthError, OAuth2Error):
+        print("Google authorization failed or was declined. Run login to try again.", file=sys.stderr)
+    except HttpError as error:
+        print(f"Google Drive request failed (HTTP {error.resp.status}). Check Drive API access and account permissions.", file=sys.stderr)
+    except RequestException:
+        print("Could not reach Google. Check your connection and try again.", file=sys.stderr)
+    except (OSError, ValueError, sqlite3.Error) as error:
         print(f"Error: {error}", file=sys.stderr)
-        return 1
+    except KeyboardInterrupt:
+        print("Cancelled.", file=sys.stderr)
+        return 130
+    return 1
 
 
 if __name__ == "__main__":

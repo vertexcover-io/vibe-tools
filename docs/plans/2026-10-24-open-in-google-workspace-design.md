@@ -30,8 +30,8 @@ native GUI package.
 ### Non-Functional Requirements
 
 - Runs on macOS, Windows, and Linux with Python 3.11+ and `uv`.
-- Stores only metadata in a per-user SQLite database; OAuth tokens remain in the standard
-  Google OAuth token file and are excluded from source control.
+- Stores only metadata in a per-user SQLite database; OAuth tokens use the native OS
+  credential store. The October 2026 distribution update replaces the initial token file.
 - Requests the narrow `drive.file` scope, limiting access to files created or opened by
   this app.
 - Uses atomic replacement for successful remote-to-local syncs.
@@ -84,7 +84,7 @@ predictable, non-destructive operation.
 
 ## High-Level Design
 
-`open` validates the extension, hashes the local file, reads a path-keyed mapping from
+`open` validates the extension, hashes the local file, reads an account/client/path-keyed mapping from
 SQLite, and either opens its `webViewLink` or uploads the file while declaring the target
 Google Workspace MIME type. It records the Drive ID, target type, original export MIME
 type, local SHA-256 baseline, and Drive version.
@@ -111,5 +111,6 @@ the exported file hash and new Drive version only after replacement succeeds.
 ## Assumptions
 
 - The user owns or can edit the created Drive files.
-- The user configures a Google Cloud OAuth desktop client and Drive API access.
+- The publisher configures a Google Cloud OAuth desktop client and Drive API access once,
+  then distributes its client JSON. Users authorize their own Google accounts in the browser.
 - Manual sync is intentionally remote-to-local only for this release.
