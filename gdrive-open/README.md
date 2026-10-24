@@ -39,9 +39,8 @@ uv run gdrive-open.py open ~/Documents/budget.xlsx
 ```
 
 Choose your Google account in the browser and approve Drive access. Files are created in
-your own Drive. A configured distribution includes the app's Desktop OAuth client, so end
-users do not need a Google Cloud project. **This source checkout still needs the publisher's
-client JSON before live login will work**; see Publisher setup below.
+your own Drive. This source checkout includes the app's Desktop OAuth configuration, so
+users do not need a Google Cloud project or a separate credentials file.
 
 Login tokens are stored in macOS Keychain, Windows Credential Locker, or Linux Secret
 Service. Linux needs an unlocked Secret Service keyring (for example GNOME Keyring).
@@ -90,6 +89,9 @@ To use double-clicks, configure your operating system's file association to invo
 stable absolute path when configuring the association.
 
 ## Publisher setup (once per app)
+
+The included configuration is ready for builds. These steps are for publishers using
+their own Google Cloud project:
 
 1. Enable Google Drive API in your Google Cloud project.
 2. Configure Google Auth Platform branding, an **External** audience, and only the
@@ -147,11 +149,13 @@ review a sync result before relying on it.
 Install `uv`, then run from this folder:
 
 ```sh
-./install.sh --client-config /path/to/desktop-client.json
+./install.sh
 ```
 
 This builds for the current OS/CPU and installs `gdrive-open` into `~/.local/bin`
 (`gdrive-open.exe` on Windows). Use `--bin-dir /path/to/bin` to choose another directory.
+The app's Desktop OAuth configuration is included in `oauth-client.json` and bundled
+automatically. After installing, run `gdrive-open login` to sign in with your own account.
 No sudo is needed for the default location. If that directory is missing from PATH,
 the script prints an export command; add it to your shell startup file for future sessions.
 Use Bash on macOS/Linux or Git Bash with native Windows `uv`; WSL installs a Linux binary.
@@ -159,21 +163,21 @@ Use Bash on macOS/Linux or Git Bash with native Windows `uv`; WSL installs a Lin
 Rerun to upgrade. The existing executable is replaced only after a successful build and
 copy. Close a running Windows executable before upgrading. To uninstall, remove the
 installed executable; account credentials and file mappings are kept separately.
-Omit `--client-config` to use a sibling `oauth-client.json`, or supply `--credentials`
-when running the installed app if no client was bundled.
+Developers using their own Google Cloud project can override the bundled app configuration
+with `--client-config /path/to/desktop-client.json`. Personal login tokens are never bundled.
 
 ## Build a binary
 
 Install `uv`, then run from this folder:
 
 ```sh
-./build-binary.sh --client-config /path/to/desktop-client.json
+./build-binary.sh
 ```
 
 The shell command works from any working directory, forwards all arguments to the Python
 builder, and builds for the current OS and CPU architecture. Use macOS/Linux Bash, or Git
 Bash with Windows `uv` for a Windows binary. WSL produces a Linux binary. In PowerShell,
-run `uv run build-binary.py --client-config C:\path\desktop-client.json` directly.
+run `uv run build-binary.py` directly.
 
 This creates `dist/<os>-<architecture>/gdrive-open` (or `gdrive-open.exe`), a distribution
 zip containing the executable and README, and `SHA256SUMS` for the executable. The Python

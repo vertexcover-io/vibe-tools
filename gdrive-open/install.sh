@@ -8,7 +8,7 @@ Usage: ./install.sh [--bin-dir DIR] [--client-config PATH]
 
 Build gdrive-open for this OS/CPU and install it (requires uv).
   --bin-dir DIR         Executable directory (default: ~/.local/bin)
-  --client-config PATH  Desktop OAuth client JSON to bundle
+  --client-config PATH  Override the included Desktop OAuth client configuration
   -h, --help            Show this help
 
 Use Bash on macOS/Linux or Git Bash with native Windows uv on Windows.

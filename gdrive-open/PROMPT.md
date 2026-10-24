@@ -127,3 +127,22 @@ User asked: "Commit to vibe-tools and push , cleanup worktree", then
 - Validation: 47 Python tests and installer shell checks passed. A real macOS ARM64
   build installed successfully into a temporary path containing spaces and ran `--help`.
   Windows/Linux execution still requires testing on those operating systems.
+
+## Iteration: install without configuration arguments
+
+Model/agent: Codex (GPT-6).
+
+User asked: "I want to package the credentials in the binary", then
+"why install.sh --client-config /path/to/credentials.json why ? only install.sh should install it right?"
+
+- Included the app's validated Desktop OAuth configuration as `oauth-client.json`, which
+  the builder already automatically embeds. A fresh checkout can now run `./install.sh`
+  without providing a client-config path. Only public Desktop app configuration is included;
+  personal access tokens, refresh tokens, and local file mappings are excluded.
+- Updated installation instructions and option help; `--client-config` remains an optional
+  developer override for a different Google Cloud project.
+- Validation: ran `./install.sh` with no arguments successfully on macOS ARM64, installing
+  into `~/.local/bin`. All 47 Python tests and the installer shell checks passed.
+- After discussing public Desktop OAuth clients and the distinction from personal login
+  tokens, the user explicitly authorized publishing the included app configuration:
+  "Yes push everything to github then" and "To the main repo".
