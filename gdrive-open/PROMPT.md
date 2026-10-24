@@ -96,3 +96,17 @@ then "Package into a binary" while that work was underway.
   and invalid-config path were smoke-tested, its ad-hoc signature verified, and its archive
   checked for the required dependencies/client data and absence of token/database files.
   Live browser consent and a real Drive upload were not part of this packaging check.
+
+## Iteration: shell build entry point
+
+Model/agent: Codex (GPT-6 Astra).
+
+User asked: "Create a shell script to create a binary for the platform and commit everything".
+
+- Added executable `build-binary.sh`, which checks for uv, locates the Python builder
+  relative to itself, and forwards arguments without depending on the working directory.
+- Reuses the existing host-platform/architecture detection and packaging pipeline.
+- Documented macOS/Linux, Git Bash on Windows, and direct PowerShell usage. Build artifacts
+  remain ignored; all tool source/documentation changes are committed on the feature branch.
+- Validated Bash syntax and built the macOS ARM64 executable from outside the repository
+  with a client-config path containing spaces; the packaged executable passed its help check.

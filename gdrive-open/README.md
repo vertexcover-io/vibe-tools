@@ -144,11 +144,16 @@ review a sync result before relying on it.
 
 ## Build a binary
 
-From this folder, run:
+Install `uv`, then run from this folder:
 
 ```sh
-uv run build-binary.py --client-config /path/to/desktop-client.json
+./build-binary.sh --client-config /path/to/desktop-client.json
 ```
+
+The shell command works from any working directory, forwards all arguments to the Python
+builder, and builds for the current OS and CPU architecture. Use macOS/Linux Bash, or Git
+Bash with Windows `uv` for a Windows binary. WSL produces a Linux binary. In PowerShell,
+run `uv run build-binary.py --client-config C:\path\desktop-client.json` directly.
 
 This creates `dist/<os>-<architecture>/gdrive-open` (or `gdrive-open.exe`), a distribution
 zip containing the executable and README, and `SHA256SUMS` for the executable. The Python
@@ -164,6 +169,8 @@ has been tested on macOS Apple Silicon; Windows and Linux builds still need test
 those hosts. Linux users need a working Secret Service credential store. macOS builds
 are locally signed by PyInstaller, but are not Developer ID signed or notarized for public
 distribution. No installer or automatic file-association registration is included.
+Generated binaries, archives, and checksums stay in the ignored `dist/` directory; Git
+tracks the build scripts and source.
 
 ## Tests
 
