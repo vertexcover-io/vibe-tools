@@ -73,3 +73,26 @@ User asked: "rename app to gdrive-open".
 - Google Cloud consent-screen branding is managed separately in the Cloud Console.
 - Validation: all 42 tests passed, including state-directory and keyring compatibility;
   Ruff, CLI `--help`, and whitespace checks passed.
+
+## Iteration: loading indicator and standalone binary
+
+Model/agent: Codex (GPT-6 Astra).
+
+User asked: "While its opening can we show a small loader or progress bar or something",
+then "Package into a binary" while that work was underway.
+
+- Added a transient Rich spinner for login, upload/conversion, remote lookup, browser
+  launch, and export. It is disabled for redirected output, and context managers stop it
+  on errors/cancellation. It does not claim to measure the browser's page-load progress.
+- Added `build-binary.py`, a self-contained uv/PyInstaller build command. Each build targets
+  the host OS/architecture and creates a single executable, zip, and SHA-256 checksum.
+- Bundles a validated Desktop OAuth client when supplied. The staging step reconstructs
+  only the required public client fields and never copies user tokens or SQLite state.
+- Preserves the runtime credential-store identity and existing state paths. Uses the
+  existing bundled-resource lookup to find the embedded client in a frozen executable.
+- The local artifact targets macOS ARM64. It is not a GUI installer, Developer ID signed,
+  or notarized. Windows/Linux builds require their own build hosts and verification.
+- Validation: 46 tests, Ruff, and whitespace checks passed. The native executable's help
+  and invalid-config path were smoke-tested, its ad-hoc signature verified, and its archive
+  checked for the required dependencies/client data and absence of token/database files.
+  Live browser consent and a real Drive upload were not part of this packaging check.

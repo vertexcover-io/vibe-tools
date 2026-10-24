@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 
 SCRIPT_PATH = Path(__file__).with_name("gdrive-open.py")
@@ -20,6 +20,28 @@ assert SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
+
+
+class ActivityTests(unittest.TestCase):
+    def test_spinner_is_silent_when_output_is_redirected(self) -> None:
+        from rich.console import Console
+        output = io.StringIO()
+        with patch("rich.console.Console", return_value=Console(file=output, force_terminal=False)):
+            with MODULE.activity("Uploading to Google Drive..."):
+                pass
+        self.assertEqual(output.getvalue(), "")
+
+    def test_spinner_cleans_up_and_propagates_error(self) -> None:
+        status = MagicMock()
+        status.__exit__.return_value = False
+        with patch("rich.console.Console") as factory:
+            factory.return_value.is_terminal = True
+            factory.return_value.status.return_value = status
+            with self.assertRaisesRegex(ValueError, "upload failed"):
+                with MODULE.activity("Uploading to Google Drive..."):
+                    raise ValueError("upload failed")
+            self.assertEqual(factory.return_value.status.call_args.args[0].plain, "Uploading to Google Drive...")
+        self.assertEqual(status.__exit__.call_args.args[0], ValueError)
 
 
 class RenameCompatibilityTests(unittest.TestCase):

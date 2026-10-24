@@ -8,9 +8,30 @@ This is intentionally read-first. Nothing syncs in the background. `sync` is an 
 one-way pull from Google Workspace to the original local file, and it refuses to overwrite
 local edits.
 
+## Standalone executable
+
+Extract the zip for your OS/architecture, then run the executable from a terminal:
+
+```sh
+./gdrive-open login
+./gdrive-open open ~/Documents/budget.xlsx
+./gdrive-open sync ~/Documents/budget.xlsx
+```
+
+On Windows use `.\gdrive-open.exe`. Python and `uv` are not needed for the executable.
+The commands and state directory are shared with the source version, so existing logins
+and mapped Drive IDs continue to work. A build with a bundled Desktop OAuth client only
+needs the user's Google sign-in; a build without one needs `--credentials PATH`.
+
+Interactive terminals show a small animated loader during sign-in, uploads/conversion,
+file lookup, browser launch, and downloads. It clears on success, failure, or cancellation.
+Redirected output contains no spinner/animation. The loader ends when the browser is
+launched; it cannot measure Google's page-loading progress. This is a CLI executable,
+not a native windowed installer.
+
 ## Connect Google Drive
 
-Install [uv](https://docs.astral.sh/uv/), then run from this tool's folder:
+To run from source, install [uv](https://docs.astral.sh/uv/), then run from this tool's folder:
 
 ```sh
 uv run gdrive-open.py login
@@ -121,10 +142,33 @@ legacy format safely. CSV sync exports only the first Sheet. Google Drive's regu
 endpoint has a 10 MB limit, and Office-to-Google conversion can change unsupported features;
 review a sync result before relying on it.
 
+## Build a binary
+
+From this folder, run:
+
+```sh
+uv run build-binary.py --client-config /path/to/desktop-client.json
+```
+
+This creates `dist/<os>-<architecture>/gdrive-open` (or `gdrive-open.exe`), a distribution
+zip containing the executable and README, and `SHA256SUMS` for the executable. The Python
+runtime, libraries, Drive discovery document, and validated Desktop client settings are
+embedded. Login tokens, mappings, and other local state are never bundled.
+
+If `--client-config` is omitted, a sibling `oauth-client.json` is used when present;
+otherwise the binary is built without a bundled client. Only Google's Desktop (`installed`)
+configuration is accepted. User token files and web-client configurations are rejected.
+
+Build on each target OS/architecture: PyInstaller does not cross-compile. The local build
+has been tested on macOS Apple Silicon; Windows and Linux builds still need testing on
+those hosts. Linux users need a working Secret Service credential store. macOS builds
+are locally signed by PyInstaller, but are not Developer ID signed or notarized for public
+distribution. No installer or automatic file-association registration is included.
+
 ## Tests
 
 ```sh
-uv run --with google-api-python-client --with google-auth-oauthlib --with keyring \
+uv run --with google-api-python-client --with google-auth-oauthlib --with keyring --with rich \
   python -m unittest discover -s . -p 'test_*.py'
 ```
 

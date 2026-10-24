@@ -2,13 +2,14 @@
 # AI-generated. See PROMPT.md for the prompts and model used.
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["google-api-python-client>=2,<3", "google-auth-oauthlib>=1.2,<2", "keyring>=25,<26"]
+# dependencies = ["google-api-python-client>=2,<3", "google-auth-oauthlib>=1.2,<2", "keyring>=25,<26", "rich>=13,<15"]
 # ///
 """gdrive-open: open local files in Google Workspace and explicitly pull remote edits."""
 from __future__ import annotations
 
 import argparse
-from contextlib import closing
+from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
 import hashlib
@@ -20,6 +21,20 @@ import sys
 import tempfile
 from typing import Protocol
 import webbrowser
+
+
+@contextmanager
+def activity(message: str) -> Iterator[None]:
+    """Display a transient loader only in interactive terminals."""
+    from rich.console import Console
+    from rich.text import Text
+
+    console = Console(stderr=True)
+    if not console.is_terminal:
+        yield
+        return
+    with console.status(Text(message), spinner="dots"):
+        yield
 
 
 @dataclass(frozen=True)
@@ -74,8 +89,9 @@ class SystemBrowser:
     """Open editor links with the operating system's default browser."""
 
     def open(self, url: str) -> None:
-        if not webbrowser.open(url, new=2):
-            raise ValueError(f"Could not open a browser for {url}")
+        with activity("Opening your browser..."):
+            if not webbrowser.open(url, new=2):
+                raise ValueError(f"Could not open a browser for {url}")
 
 
 class GoogleDriveGateway:
@@ -175,14 +191,16 @@ def open_local_file(
     normalized_path = source_path.resolve()
     existing_mapping = store.get(normalized_path)
     if existing_mapping is not None:
-        remote_file = drive.get_file(existing_mapping.drive_id)
+        with activity("Finding your Google file..."):
+            remote_file = drive.get_file(existing_mapping.drive_id)
         if remote_file.trashed:
             raise ValueError("Mapped Google Workspace file is trashed; restore it in Drive first")
         browser.open(remote_file.web_view_link)
         return OpenResult(created=False, remote_file=remote_file)
 
     file_format = format_for_path(normalized_path)
-    remote_file = drive.import_file(normalized_path, file_format)
+    with activity("Uploading and converting your file..."):
+        remote_file = drive.import_file(normalized_path, file_format)
     if remote_file.trashed:
         raise ValueError("Google Drive returned a trashed file after import")
     store.upsert(
@@ -209,7 +227,8 @@ def sync_remote_file(
     mapping = store.get(normalized_path)
     if mapping is None:
         raise ValueError("No mapped Google Workspace file; run open first")
-    remote_file = drive.get_file(mapping.drive_id)
+    with activity("Checking for Google Drive changes..."):
+        remote_file = drive.get_file(mapping.drive_id)
     if remote_file.trashed:
         raise ValueError("Mapped Google Workspace file is trashed; restore it in Drive first")
     current_hash = sha256_file(normalized_path)
@@ -221,7 +240,8 @@ def sync_remote_file(
     )
     if decision is not SyncDecision.DOWNLOAD_REMOTE:
         return SyncResult(decision=decision)
-    exported_content = drive.export_file(mapping.drive_id, mapping.export_mime_type)
+    with activity("Downloading your Google file..."):
+        exported_content = drive.export_file(mapping.drive_id, mapping.export_mime_type)
     if sha256_file(normalized_path) != current_hash:
         return SyncResult(decision=SyncDecision.CONFLICT)
     replace_file_atomically(normalized_path, exported_content)
@@ -602,7 +622,8 @@ def connect_account(
     *, client: OAuthClient, state_dir: Path, vault: TokenVault,
     provider: LoginProvider, force_login: bool = False,
 ) -> LoginSession:
-    saved = vault.read()  # Detect a missing/locked keyring before asking for browser consent.
+    with activity("Checking your saved login..."):
+        saved = vault.read()
     legacy_token = state_dir / "token.json"
     if legacy_token.is_file():
         try:
@@ -619,11 +640,13 @@ def connect_account(
             saved = vault.read()
     if saved and not force_login:
         credentials = required_string(json_object(saved).get("credentials"), "saved credentials")
-        session = provider.resume(client, credentials)
+        with activity("Connecting to Google Drive..."):
+            session = provider.resume(client, credentials)
         if session.account.permission_id != account_from_saved(saved).permission_id:
             raise ValueError("Saved login resolved to a different account. Run login to reconnect.")
     else:
-        session = provider.login(client)
+        with activity("Waiting for Google sign-in in your browser..."):
+            session = provider.login(client)
     vault.write(saved_login(session))
     return session
 
