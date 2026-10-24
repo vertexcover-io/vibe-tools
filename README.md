@@ -115,41 +115,45 @@ for dirname, commit_date in tools_with_dates:
     print()
 
 ]]]-->
-## 11 tools
+## 12 tools
 
-### [browser-flows](https://github.com/vertexcover-io/vibe-tools/tree/master/browser-flows#readme) (2026-10-10 04:29)
+### [gdrive-open](https://github.com/vertexcover-io/vibe-tools/tree/master/gdrive-open#readme) (2026-10-24 10:19)
 
-Records a browser task once through a Chrome extension that captures clicks, typing and spoken narration, converts it into a JSON flow with named inputs, and replays it later through Claude in Chrome with fast deterministic steps and model-driven recovery only when a step breaks.
+*No description available — auto-summary unavailable.*
 
-### [hiring-triage](https://github.com/vertexcover-io/vibe-tools/tree/master/hiring-triage#readme) (2026-10-09 13:06)
-
-Keyboard-driven local web app for triaging job applicants stored in a Notion database: it lists candidates for a position by status, shows score, notes, links and resume side by side, and accepts, parks or rejects each with one key, sending a rejection email through Gmail.
-
-### [hn-hiring-classifier](https://github.com/vertexcover-io/vibe-tools/tree/master/hn-hiring-classifier#readme) (2026-10-09 12:16)
-
-Classifies an "Ask HN: Who is hiring?" post, job page, or pasted text into 16 structured fields (work mode, region, salary bucket, company stage, job functions, and more) in a single call to TypeSafe's Jev model.
-
-### [linkedin-to-notion](https://github.com/vertexcover-io/vibe-tools/tree/master/linkedin-to-notion#readme) (2026-08-26 04:13)
-
-Chrome extension that clips LinkedIn profiles into a Notion database, from the profile page or by right-clicking a name in any list, capturing name, URL, headline, company, title and location while blocking duplicates by normalized profile URL.
-
-### [ccpack](https://github.com/vertexcover-io/vibe-tools/tree/master/ccpack#readme) (2026-08-21 12:17)
+### [ccpack](https://github.com/vertexcover-io/vibe-tools/tree/master/ccpack#readme) (2026-10-10 04:35)
 
 Picks a Claude Code session from an fzf list with a readable conversation preview and zips it, or serves the same picker and transcripts as a local web UI with a download button.
 
-### [granola-cli](https://github.com/vertexcover-io/vibe-tools/tree/master/granola-cli#readme) (2026-07-04 11:10)
+### [linkedin-to-notion](https://github.com/vertexcover-io/vibe-tools/tree/master/linkedin-to-notion#readme) (2026-10-10 04:35)
 
-Command-line access to Granola meeting notes and transcripts through its private API: filter meetings by name, attendee, date or folder, then print the transcript or AI notes, authenticating from the local desktop app's session file.
+Chrome extension that clips LinkedIn profiles into a Notion database, from the profile page or by right-clicking a name in any list, capturing name, URL, headline, company, title and location while blocking duplicates by normalized profile URL.
 
-### [video-lens](https://github.com/vertexcover-io/vibe-tools/tree/master/video-lens#readme) (2026-06-24 08:14)
-
-Fetches a YouTube video's timestamped transcript and caches it locally so it can be read, searched, sliced by time range, or summarized; also ships as a Claude Code skill that answers questions from the transcript.
-
-### [electron-mod](https://github.com/vertexcover-io/vibe-tools/tree/master/electron-mod#readme) (2026-06-19 19:04)
+### [electron-mod](https://github.com/vertexcover-io/vibe-tools/tree/master/electron-mod#readme) (2026-10-10 04:35)
 
 Inspects, patches, repacks and re-signs any installed Electron app on macOS, handling asar integrity and fuse checks, stable self-signed identities so logins persist, and auto-update neutering; a companion slash command plans and self-tests the mod with Claude.
 
-### [spawn-claude](https://github.com/vertexcover-io/vibe-tools/tree/master/spawn-claude#readme) (2026-06-19 17:59)
+### [hn-hiring-classifier](https://github.com/vertexcover-io/vibe-tools/tree/master/hn-hiring-classifier#readme) (2026-10-10 04:35)
+
+Classifies an "Ask HN: Who is hiring?" post, job page, or pasted text into 16 structured fields (work mode, region, salary bucket, company stage, job functions, and more) in a single call to TypeSafe's Jev model.
+
+### [video-lens](https://github.com/vertexcover-io/vibe-tools/tree/master/video-lens#readme) (2026-10-10 04:35)
+
+Fetches a YouTube video's timestamped transcript and caches it locally so it can be read, searched, sliced by time range, or summarized; also ships as a Claude Code skill that answers questions from the transcript.
+
+### [browser-flows](https://github.com/vertexcover-io/vibe-tools/tree/master/browser-flows#readme) (2026-10-10 04:35)
+
+Records a browser task once through a Chrome extension that captures clicks, typing and spoken narration, converts it into a JSON flow with named inputs, and replays it later through Claude in Chrome with fast deterministic steps and model-driven recovery only when a step breaks.
+
+### [granola-cli](https://github.com/vertexcover-io/vibe-tools/tree/master/granola-cli#readme) (2026-10-10 04:35)
+
+Command-line access to Granola meeting notes and transcripts through its private API: filter meetings by name, attendee, date or folder, then print the transcript or AI notes, authenticating from the local desktop app's session file.
+
+### [hiring-triage](https://github.com/vertexcover-io/vibe-tools/tree/master/hiring-triage#readme) (2026-10-10 04:35)
+
+Keyboard-driven local web app for triaging job applicants stored in a Notion database: it lists candidates for a position by status, shows score, notes, links and resume side by side, and accepts, parks or rejects each with one key, sending a rejection email through Gmail.
+
+### [spawn-claude](https://github.com/vertexcover-io/vibe-tools/tree/master/spawn-claude#readme) (2026-10-10 04:35)
 
 Launches another Claude Code session from the command line with pluggable surface (tmux, cmux, Ghostty, Terminal.app or headless), mode (interactive or headless), and starting context (fresh, parent-session summary, or forked transcript).
 
