@@ -4,7 +4,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["google-api-python-client>=2,<3", "google-auth-oauthlib>=1.2,<2", "keyring>=25,<26"]
 # ///
-"""Open local office files in Google Workspace and explicitly pull remote edits."""
+"""gdrive-open: open local files in Google Workspace and explicitly pull remote edits."""
 from __future__ import annotations
 
 import argparse
@@ -435,15 +435,22 @@ def parse_remote_file(response: object) -> RemoteFile:
     return RemoteFile(drive_id=drive_id, version=version, web_view_link=web_view_link, trashed=trashed)
 
 
+APP_NAME = "gdrive-open"
+# Persistence identity must survive a product rename, including custom --state-dir paths.
+LEGACY_STORAGE_NAME = "open-in-google-workspace"
+
+
 def default_state_dir() -> Path:
-    """Choose a conventional per-user state directory on each supported platform."""
+    """Use the new name for fresh installs without orphaning an existing installation."""
     if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "open-in-google-workspace"
-    if sys.platform == "win32":
+        base = Path.home() / "Library" / "Application Support"
+    elif sys.platform == "win32":
         app_data = os.environ.get("APPDATA")
-        return Path(app_data) / "open-in-google-workspace" if app_data else Path.home() / "AppData" / "Roaming" / "open-in-google-workspace"
-    config_home = os.environ.get("XDG_CONFIG_HOME")
-    return Path(config_home or Path.home() / ".config") / "open-in-google-workspace"
+        base = Path(app_data) if app_data else Path.home() / "AppData" / "Roaming"
+    else:
+        base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    legacy = base / LEGACY_STORAGE_NAME
+    return legacy if legacy.is_dir() else base / APP_NAME
 
 
 AUTH_URI = "https://accounts.google.com/o/oauth2/auth"
@@ -541,7 +548,7 @@ class SystemTokenVault:
 
     def __init__(self, client: OAuthClient, state_dir: Path) -> None:
         self.username = hashlib.sha256(json.dumps([client.client_id, str(state_dir.resolve())]).encode()).hexdigest()
-        self.service = "open-in-google-workspace"
+        self.service = LEGACY_STORAGE_NAME
         self.backend = self._native_backend()
 
     @staticmethod
@@ -632,7 +639,7 @@ class GoogleLoginProvider:
             credentials = flow.run_local_server(
                 host="127.0.0.1", port=0, timeout_seconds=180,
                 prompt="consent select_account", access_type="offline",
-                success_message="Google Drive connected. You can close this tab.",
+                success_message="Google Drive connected to gdrive-open. You can close this tab.",
             )
         except (AttributeError, TimeoutError):
             raise LoginRequired("Login did not finish within three minutes. Run login again.") from None
@@ -683,6 +690,7 @@ class GoogleLoginProvider:
 def parser() -> argparse.ArgumentParser:
     """Build the command-line interface without executing it."""
     argument_parser = argparse.ArgumentParser(
+        prog=APP_NAME,
         description="Open local office files in Google Workspace and explicitly pull remote edits."
     )
     argument_parser.add_argument("--state-dir", type=Path, help="Directory for local file mappings (tokens stay in the OS credential store)")

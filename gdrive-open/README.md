@@ -1,4 +1,4 @@
-# open-in-google-workspace
+# gdrive-open
 
 Open a local CSV, spreadsheet, document, or presentation in its matching Google
 Workspace editor. The first `open` imports a Google copy and records its Drive ID; later
@@ -13,8 +13,8 @@ local edits.
 Install [uv](https://docs.astral.sh/uv/), then run from this tool's folder:
 
 ```sh
-uv run open-in-google-workspace.py login
-uv run open-in-google-workspace.py open ~/Documents/budget.xlsx
+uv run gdrive-open.py login
+uv run gdrive-open.py open ~/Documents/budget.xlsx
 ```
 
 Choose your Google account in the browser and approve Drive access. Files are created in
@@ -28,29 +28,34 @@ There is no plaintext fallback when the credential store is unavailable.
 
 SQLite file mappings are kept in:
 
-- macOS: `~/Library/Application Support/open-in-google-workspace/`
-- Windows: `%APPDATA%\open-in-google-workspace\`
-- Linux: `${XDG_CONFIG_HOME:-~/.config}/open-in-google-workspace/`
+- macOS: `~/Library/Application Support/gdrive-open/`
+- Windows: `%APPDATA%\gdrive-open\`
+- Linux: `${XDG_CONFIG_HOME:-~/.config}/gdrive-open/`
+
+Existing installations continue using the original `open-in-google-workspace` state folder
+when it exists, including its `credentials.json` and mappings. The internal keyring service
+name is also retained, so saved logins still work (including custom `--state-dir` paths).
+Keep using that folder if you already configured credentials there; no migration is needed.
 
 ## Commands
 
 ```sh
 # Create/reuse the mapped Google Workspace copy and open it in the default browser.
-uv run open-in-google-workspace.py open report.docx
+uv run gdrive-open.py open report.docx
 
 # Show the saved Drive ID and the last synced Drive version (no network request).
-uv run open-in-google-workspace.py status report.docx
+uv run gdrive-open.py status report.docx
 
 # Explicitly download Google-side edits to the original local path.
-uv run open-in-google-workspace.py sync report.docx
+uv run gdrive-open.py sync report.docx
 
 # Show the saved account; choose a different account; reconnect an expired login.
-uv run open-in-google-workspace.py whoami
-uv run open-in-google-workspace.py login
-uv run open-in-google-workspace.py reconnect
+uv run gdrive-open.py whoami
+uv run gdrive-open.py login
+uv run gdrive-open.py reconnect
 
 # Forget this client's login on this device, keeping files and mappings.
-uv run open-in-google-workspace.py logout
+uv run gdrive-open.py logout
 ```
 
 `open` and `sync` prompt for login if needed. `whoami` and `status` work offline using the
@@ -81,7 +86,7 @@ There is no backend server to deploy. See [Google's desktop OAuth guide](https:/
 Developers may override the bundle without editing it:
 
 ```sh
-uv run open-in-google-workspace.py --credentials /path/to/desktop-client.json login
+uv run gdrive-open.py --credentials /path/to/desktop-client.json login
 ```
 
 Configuration precedence: `--credentials`, existing state-directory `credentials.json`,

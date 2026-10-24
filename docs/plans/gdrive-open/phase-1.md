@@ -10,15 +10,15 @@ repository, along with pure sync-decision logic.
 ## Implementation
 
 **Files:**
-- Create: `open-in-google-workspace/open-in-google-workspace.py`
-- Create: `open-in-google-workspace/test_open_in_google_workspace.py`
+- Create: `gdrive-open/gdrive-open.py`
+- Create: `gdrive-open/test_gdrive_open.py`
 
 **What to test:**
 - Format selection maps CSV/XLSX/DOCX/PPTX to correct Workspace and export types.
 - A mapping round-trips through SQLite.
 - Sync decisions distinguish unchanged, remote-changed, local-changed, and conflicting states.
 
-**Commit:** `add open-in-google-workspace: open local office files in Google Workspace`
+**Commit:** `add gdrive-open: open local office files in Google Workspace`
 
 ## Done When
 

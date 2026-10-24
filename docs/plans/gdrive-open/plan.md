@@ -1,6 +1,6 @@
-# Plan: Open in Google Workspace
+# Plan: gdrive-open
 
-> **Source:** [design](../2026-10-24-open-in-google-workspace-design.md)
+> **Source:** [design](../2026-10-24-gdrive-open-design.md)
 > **Created:** 2026-10-24
 > **Status:** complete
 

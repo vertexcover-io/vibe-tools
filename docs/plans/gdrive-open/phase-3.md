@@ -10,8 +10,8 @@ association directions, safety guarantees, and an AI prompt log.
 ## Implementation
 
 **Files:**
-- Create: `open-in-google-workspace/README.md`
-- Create: `open-in-google-workspace/PROMPT.md`
+- Create: `gdrive-open/README.md`
+- Create: `gdrive-open/PROMPT.md`
 
 **What to verify:**
 - `--help` lists all supported commands.

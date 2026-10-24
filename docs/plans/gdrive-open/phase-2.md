@@ -10,8 +10,8 @@ changes with conflict checks and atomic replacement.
 ## Implementation
 
 **Files:**
-- Modify: `open-in-google-workspace/open-in-google-workspace.py`
-- Modify: `open-in-google-workspace/test_open_in_google_workspace.py`
+- Modify: `gdrive-open/gdrive-open.py`
+- Modify: `gdrive-open/test_gdrive_open.py`
 
 **What to test:**
 - Existing mappings open without importing.

@@ -59,3 +59,17 @@ configuration, login/logout/reconnect, secure storage, PKCE, and account-specifi
   Ruff and `git diff --check` passed, and the script's `--help` exposes the new commands.
 - No live Google consent, real keychain operation, or Windows/Linux end-to-end run was
   performed. These remain release checks once the publisher supplies its Desktop client.
+
+## Iteration: rename to gdrive-open
+
+Model/agent: Codex (GPT-6 Astra).
+
+User asked: "rename app to gdrive-open".
+
+- Renamed the tool folder, main script, tests, CLI help, and current documentation.
+- Fresh installs use the `gdrive-open` state folder. Existing installations keep the original
+  state directory and credential-store identity so saved logins and Drive mappings survive.
+- Historical prompt entries above retain their original command names.
+- Google Cloud consent-screen branding is managed separately in the Cloud Console.
+- Validation: all 42 tests passed, including state-directory and keyring compatibility;
+  Ruff, CLI `--help`, and whitespace checks passed.

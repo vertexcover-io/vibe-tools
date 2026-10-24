@@ -1,4 +1,4 @@
-# Open in Google Workspace — Design
+# gdrive-open — Design
 
 ## Problem Statement
 

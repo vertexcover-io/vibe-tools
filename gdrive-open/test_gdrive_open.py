@@ -1,5 +1,5 @@
 # AI-generated. See PROMPT.md for the prompts and model used.
-"""Behavior tests for open-in-google-workspace."""
+"""Behavior tests for gdrive-open."""
 from __future__ import annotations
 
 import importlib.util
@@ -13,13 +13,45 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 
-SCRIPT_PATH = Path(__file__).with_name("open-in-google-workspace.py")
-SPEC = importlib.util.spec_from_file_location("open_in_google_workspace", SCRIPT_PATH)
+SCRIPT_PATH = Path(__file__).with_name("gdrive-open.py")
+SPEC = importlib.util.spec_from_file_location("gdrive_open", SCRIPT_PATH)
 assert SPEC is not None
 assert SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
+
+
+class RenameCompatibilityTests(unittest.TestCase):
+    def test_new_installs_use_gdrive_open_state_directory_on_each_platform(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for platform, base in (("darwin", root / "Library" / "Application Support"),
+                                   ("win32", root / "roaming"), ("linux", root / "config")):
+                with self.subTest(platform=platform), patch.object(MODULE.sys, "platform", platform), \
+                     patch.object(Path, "home", return_value=root), \
+                     patch.dict(MODULE.os.environ, {"APPDATA": str(root / "roaming"), "XDG_CONFIG_HOME": str(root / "config")}):
+                    self.assertEqual(MODULE.default_state_dir(), base / "gdrive-open")
+
+    def test_existing_state_is_reused_even_if_new_named_directory_also_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            legacy = root / "open-in-google-workspace"
+            legacy.mkdir()
+            (root / "gdrive-open").mkdir()
+            with patch.object(MODULE.sys, "platform", "linux"), \
+                 patch.dict(MODULE.os.environ, {"XDG_CONFIG_HOME": str(root)}):
+                self.assertEqual(MODULE.default_state_dir(), legacy)
+
+    def test_rename_keeps_existing_keyring_service_and_username(self) -> None:
+        import hashlib
+        client = MODULE.OAuthClient("123.apps.googleusercontent.com", "desktop-secret")
+        state_dir = Path("/existing/custom/state")
+        with patch.object(MODULE.SystemTokenVault, "_native_backend"):
+            vault = MODULE.SystemTokenVault(client, state_dir)
+        expected = hashlib.sha256(json.dumps([client.client_id, str(state_dir.resolve())]).encode()).hexdigest()
+        self.assertEqual(vault.service, "open-in-google-workspace")
+        self.assertEqual(vault.username, expected)
 
 
 class SupportedFormatTests(unittest.TestCase):
